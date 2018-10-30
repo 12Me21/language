@@ -4,15 +4,30 @@
 #include <string.h>
 
 enum Token_Type {
-	tkEOF=0,
-	tkNUMBER, tkSTRING,
-	tkDOT,
-	tkBRACKET_LEFT, tkBRACKET_RIGHT, tkPAREN_LEFT, tkPAREN_RIGHT,
+	tkEOF=256,
+	tkNUMBER,
+	tkSTRING,
 	tkERROR,
-	tkTILDE,
 	tkNOT_EQUAL,
-	tkLOGICAL_NOT,
+	tkCOMPARE,
+	tkLESS_OR_EQUAL,
+	tkGREATER_OR_EQUAL,
+	tkLEFT_SHIFT,
+	tkRIGHT_SHIFT,
+	tkWORD,
+	
+	tkKEYWORD,
+	tkIF=tkKEYWORD,
+	tkTHEN,
+	tkELSE,
+	tkELSEIF,
+	tkENDIF,
+	tkFOR,
+	tkNEXT,
+	tkWHILE,
+	tkWEND,
 };
+
 
 enum Error_Type {
 	erNONE=0,
@@ -23,15 +38,15 @@ char * TOKEN_NAME[] = {
 	"EOF",
 	"Number",
 	"String",
-	"Dot",
-	"Left Bracket",
-	"Right Bracket",
-	"Left Paren",
-	"Right Paren",
 	"Error",
-	"~",
 	"!=",
-	"!",
+	"==",
+	"<=",
+	">=",
+	"<<",
+	">>",
+	"word",
+	"keyword",
 };
 
 struct Token {
@@ -40,24 +55,71 @@ struct Token {
 		double number;
 		char * pointer;
 		enum Error_Type error;
+		int id;
 	};
 	//value can be:
 	//-- double
 	//-- pointer to string
-	//-- pointer to name (no duplicates)
-	//-- id (for keywords)
+	//-- id (for keywords/names)
 };
 
-char * name_table[10000];
+//change this into one big char array (more efficient)
+char * name_table[10000] = {
+	//Real keywords
+	"IF",
+	"THEN",
+	"ELSE",
+	"ELSEIF",
+	"ENDIF",
+	"FOR",
+	"NEXT",
+	"WHILE",
+	"WEND",
+	//Soft keywords
+	"TO",
+	"STEP",
+	//Names
+	//...
+};
+#define KEYWORDS_END 9
+int name_table_end;
+
+enum Soft_Keyword {
+	nmTO = KEYWORDS_END+1,
+	nmSTEP
+};
 
 bool is_digit(char c){
 	return c>='0' && c<='9';
 }
 
+bool is_alpha(char c){
+	return (c>='A' && c<='Z') || (c>='a' && c<='z');
+}
+
 #define single(chr, name) case chr: token->type=tk##name; return
 
+int add_name(char * new_name, size_t new_length){
+	for(int i=0;i<name_table_end;i++){
+		if(strlen(name_table[i])==new_length){
+			if(!memcmp(name_table[i], new_name, new_length)){
+				return i;
+			}
+		}
+	}
+	name_table[name_table_end]=memcpy(malloc(new_length+1),new_name,new_length);
+	name_table[name_table_end][new_length]='\0';
+	return name_table_end++;
+}
+
+char c;
+
+void init(char * code){
+	name_table_end = KEYWORDS_END;
+	c=*code;
+}
+
 void next_token(char * * code, struct Token * token){
-	char c=*(*code);
 	//printf("call\n");
 	void next(){
 		//printf("%c",c);
@@ -123,9 +185,9 @@ void next_token(char * * code, struct Token * token){
 				token->number=number;
 				return;
 			}
-			token->type=tkDOT;
+			token->type='.';
 			return;
-		case '"':
+		case '"':;
 			char * start = *code;
 			while(c && c!='"' && c!='\n')
 				next();
@@ -142,65 +204,104 @@ void next_token(char * * code, struct Token * token){
 			token->type=tkERROR;
 			token->error=erUNCLOSED_STRING;
 			return;
-		single('~',TILDE);
 		case '!':
 			if(c=='='){
 				next();
 				token->type=tkNOT_EQUAL;
 				return;
 			}
-			token->type=tkLOGICAL_NOT;
+			token->type='!';
 			return;
 		case '@':
 		case '#':
 		case '$':
-		case '%':
-		single('^',EXPONENT);
-		single('&',BITWISE_AND);
-		single('*',MULTIPLY);
-		single('(',LEFT_PAREN);
-		single(')',RIGHT_PAREN);
-		single('-',MINUS);
-		single('+',PLUS);
 		case '=':
-		case '[':
-		case ']':
-		case '{':
-		case '}':
-		case '|':
-		case '\\':
-		case ':':
-		case ';':
+			if(c=='='){
+				next();
+				token->type=tkCOMPARE;
+				return;
+			}
+			token->type='=';
+			return;
 		case '\'':
+			while(c && c!='\n')
+				next();
+			// (don't return here, read another token)
 		case '<':
+			if(c=='<'){
+				next();
+				token->type=tkLEFT_SHIFT;
+				return;
+			}
+			if(c=='='){
+				next();
+				token->type=tkLESS_OR_EQUAL;
+				return;
+			}
+			token->type='<';
+			return;
 		case '>':
-		case ',':
-		case '?':
-		case '/':
+			if(c=='>'){
+				next();
+				token->type=tkRIGHT_SHIFT;
+				return;
+			}
+			if(c=='='){
+				next();
+				token->type=tkGREATER_OR_EQUAL;
+				return;
+			}
+			token->type='>';
+			return;
 		default:
-			
+			if(is_alpha(old_c) || old_c=='_'){
+				char * start = *code-1;
+				while(is_alpha(c) || c=='_' || is_digit(c)){
+					next();
+				}
+				int id = add_name(start, *code-start);
+				if(id < KEYWORDS_END){
+					token->type=tkKEYWORD+id;
+				}else{
+					token->type=tkWORD;
+					token->id=id;
+				}
+				return;
+			}
 		}
 	}
 }
 
-char * code = "12345!=\"TEST\"";
-
-int main(){
+void compile(char * code){
+	init(code);
 	struct Token token;
-	printf("Code: %s\n", code);
+	printf("Code: %s\n\n",code);
 	while(1){
 		next_token(&code, &token);
-		printf("=== Token Type: %s\n", TOKEN_NAME[token.type]);
-		switch(token.type){
-		case tkEOF:
-			return 0;
-		case tkNUMBER:
-			printf("number: %f\n", token.number);
-		break;case tkSTRING:
-			printf("string: %s\n", token.pointer);
-		//break;case
+		if(token.type>=tkKEYWORD){
+			printf("=== Token Type: Keyword: %s\n", name_table[token.type-tkKEYWORD]);
+		}else if(token.type>=256){
+			printf("=== Token Type: %s\n", TOKEN_NAME[token.type-256]);
+			switch(token.type){
+			case tkEOF:
+				return;
+			case tkNUMBER:
+				printf("number: %f\n", token.number);
+			break;case tkSTRING:
+				printf("string: %s\n", token.pointer);
+			break;case tkWORD:
+				printf("Word %d: %s\n", token.id, name_table[token.id]);
+			}
+		}else{
+			printf("=== Token Type: %c\n", token.type);
 		}
 	}
-	//eof:
+}
+
+//char * code = "12345!=\"TEST\"  TEST TEST THE SAND CAN BE EATEN";
+char * code = "FOR I=0 TO 10";
+
+int main(){
+	compile(code);
 	return 0;
 }
