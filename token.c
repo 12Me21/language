@@ -453,7 +453,8 @@ void compile(char * code){
 	void next(){
 		if(read_next){
 			next_token(&code, &token);
-			printf("token type: %d\n",token.type);
+			print_token(token);
+			//printf("token type: %d\n",token.type);
 		}else
 			read_next=true;
 	}
@@ -703,7 +704,7 @@ void compile(char * code){
 // since nuls might exist within the expression
 
 //char * code = "12345!=\"TEST\"  TEST TEST THE SAND CAN BE EATEN";
-char * code = "FOR I=0 TO 10";
+char * code = "FOR I=1+1 TO 10";
 
 int main(){
 	compile(code);
