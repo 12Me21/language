@@ -21,6 +21,7 @@ enum Type {
 struct String {
 	char * pointer;
 	uint32_t length;
+	//int references;
 };
 
 struct Variable;
@@ -179,8 +180,7 @@ int main(){
 
 //important:
 //make sure that values don't contain direct pointers to strings/tables since they might need to be re-allocated.
-
+//don't get rid of the Variable struct since it's needed for keeping track of constraints etc.
 
 //Jobs for the parser:
 // - generate a list of all properties (table.property) independantly from other words
-
