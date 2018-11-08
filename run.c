@@ -14,6 +14,7 @@ enum Type {
 	tNumber,
 	tString,
 	tTable,
+	tArray,
 	tFunction,
 	tBoolean,
 	tNone,
@@ -28,6 +29,11 @@ struct String {
 
 struct Variable;
 
+struct Array {
+	struct Variable pointer[];
+	uint32_t length;
+};
+
 // A value or variable
 // Variables just contain the extra "constraint_expression" field
 // Multiple things should not point to the same Value or Variable. EVER.
@@ -37,6 +43,7 @@ struct Value {
 		double number;
 		struct String * string;
 		struct Table * table;
+		struct Array * array;
 		Address function;
 		bool boolean;
 	};
@@ -85,6 +92,16 @@ struct Item {
 		unsigned int locals;
 	};
 };
+
+struct Array * allocate_array(int length){
+	return ALLOC_INIT(struct Array, {.pointer = malloc(struct Variable, length), .length = length});
+}
+
+void assign_variable(struct Value variable, struct Value value){
+	variable.variable->value = value;
+	//TODO: check constraint
+}
+
 //ideally:
 // code item:
 // - operator type / value type
@@ -215,7 +232,8 @@ int main(){
 			case oAssign:;
 				struct Value value = pop();
 				struct Value variable = pop();
-				variable.variable->value = value;
+				//assign_variable(variable, value); (I don't think assigments happen anywhere but here)
+				variable.variable->value = value; 
 				break;
 			case oPrint:;
 				for(i = item.length;i>=1;i--){
@@ -245,11 +263,11 @@ int main(){
 				stack_discard(item.length);
 				printf("\n");
 				break;
+			//End of program
 			case oHalt:
 				goto end;
+			//Table literal
 			case oTable:;
-				//this is for table literals
-				//maybe those should just compile to a bunch of VAR statements?
 				i=item.length;
 				struct Table * table = ALLOC_INIT(struct Table, {.first=NULL, .last=NULL});
 				while(i-->0){
@@ -259,12 +277,33 @@ int main(){
 				}
 				push((struct Value){.type = tTable, .table = table});
 				break;
+			// Array literal
+			case oArray:
+				struct Array * array = allocate_array(item.length);
+				for(i = item.length;i>=1;i--)
+					array->pointer[i].value = stack_get(i);
+				stack_discard(item.length);
+				push((struct Value){.type = tArray, .array = array});
+			// Array/Table access
 			case oIndex:; //table, key
 				b = pop(); //key
 				a = pop(); //table
-				if(a.type!=tTable)
-					die("tried to index something that wasn't a table\n");
-				push(table_lookup(a.table, b));
+				switch(a.type){
+				case tTable:
+					push(table_lookup(a.table, b));
+					break;
+				case tArray:
+					if(b.type!=tNumber)
+						die("You need to use a number for the array index!\n");
+					if(b.number<0)
+						die("The array index can't be less than 0\n");
+					if(b.number >= a.array->length)
+						die("That array was only ... %d elements long\n");
+					push(a.array->pointer[(uint32_t)b.number].value);
+					break;
+				default:
+					die("Tried to index something that wasn't a table or an array\n"); // etoyr viyr rttpt zrddshrd !
+				}
 				break;
 			case oCall:
 				call(item.address);
@@ -417,3 +456,6 @@ X
 //	.vars
 
 //check worry about this later
+
+//You... did read all that... right?
+//Oh... well, I'm sure you knew it already...
