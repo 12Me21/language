@@ -30,7 +30,7 @@ struct String {
 struct Variable;
 
 struct Array {
-	struct Variable pointer[];
+	struct Variable * pointer;
 	uint32_t length;
 };
 
@@ -46,6 +46,7 @@ struct Value {
 		struct Array * array;
 		Address function;
 		bool boolean;
+		int args;
 	};
 	struct Variable * variable;
 };
@@ -75,6 +76,13 @@ enum Operator {
 	oTable, //table literal.
 	//<key><value><key><value>...<oTable(# of items)>
 	oIndex,
+	oScope,
+	oArray,
+	oCall,
+	oRet,
+	oDiscard,
+	oReturn,
+	oDeclare,
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be a Value, with a special [type]
@@ -94,11 +102,13 @@ struct Item {
 };
 
 struct Array * allocate_array(int length){
-	return ALLOC_INIT(struct Array, {.pointer = malloc(struct Variable, length), .length = length});
+	return ALLOC_INIT(struct Array, {.pointer = malloc(sizeof(struct Variable) * length), .length = length});
 }
 
-void assign_variable(struct Value variable, struct Value value){
-	variable.variable->value = value;
+void assign_variable(struct Value * variable, struct Value * value){
+	struct Variable * old_var_ptr = variable->variable;
+	variable->variable->value = *value;
+	variable->variable->value.variable = old_var_ptr;
 	//TODO: check constraint
 }
 
@@ -115,6 +125,8 @@ void assign_variable(struct Value variable, struct Value value){
 // - constraint expression
 
 #define STACK_SIZE 256
+#define SCOPE_STACK_SIZE 256
+#define CALL_STACK_SIZE 256
 //#define die longjmp(err_ret, 0)
 #define die(message) {printf(message); longjmp(err_ret, 0);}
 struct Value stack[STACK_SIZE];
@@ -126,16 +138,21 @@ struct Item code[65536];
 Address call_stack[256];
 uint32_t call_stack_pointer = 0;
 struct Variable * scope_stack[256];
-unsigned int scope_pointer = 0;
+unsigned int scope_stack_pointer = 0;
 
 Address pos = 0;
+
+void make_variable(struct Variable * variable){
+	variable->value = (struct Value){.type = tNone};
+	variable->value.variable = variable;
+}
 
 void push_scope(int locals){
 	if(scope_stack_pointer >= SCOPE_STACK_SIZE)
 		die("Scope Stack Overflow\n");
-	scope_stack[scope_stack_pointer++] = malloc(sizeof(struct Variable), locals);
-	//variables will not be initialized. you must use VAR first
-	//perhaps they should be set to some known value so error checking can happen.
+	struct Variable * scope = scope_stack[scope_stack_pointer++] = malloc(sizeof(struct Variable) * locals);
+	for(int i=0;i<locals;i++)
+		make_variable(&scope[i]);
 }
 
 void pop_scope(){
@@ -154,7 +171,6 @@ void call(Address address){
 void ret(){
 	if(call_stack_pointer <= 0)
 		die("Internal Error: Call Stack Underflow\n");
-	void call(Address address){
 	pos = call_stack[--call_stack_pointer];
 }
 
@@ -185,27 +201,32 @@ void stack_discard(int amount){
 #include "table.c"
 
 int main(){
-	struct Variable * x = ALLOC_INIT(struct Variable, {.value = {.type = tNumber, .number = 1}});
-	x->value.variable = x;
-	struct Variable * y = ALLOC_INIT(struct Variable, {.value = {.type = tNumber, .number = 1}});
-	y->value.variable = y;
 	
 	unsigned int i=0;
 	
-	code[i++] = (struct Item){.operator = oScope, .locals = 2}; //required
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 4}};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 8}};
-	code[i++] = (struct Item){.operator = oTable, .length = 1};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 4}};
-	code[i++] = (struct Item){.operator = oIndex, .length = 1};
-	code[i++] = (struct Item){.operator = oPrint, .length = 1};
-	code[i++] = (struct Item){.operator = oHalt};
+	code[i++] = (struct Item){.operator = oScope, .locals = 2}; //(2 variables)
+	//X=4
+	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0}; //X
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 4}}; //4
+	code[i++] = (struct Item){.operator = oAssign}; // =
+	//Y=6
+	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 1}; //Y
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 6}}; //6
+	code[i++] = (struct Item){.operator = oAssign}; //=
+	//print X+Y
+	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0}; //X
+	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 1}; //Y
+	code[i++] = (struct Item){.operator = oAdd}; //+
+	code[i++] = (struct Item){.operator = oPrint, .length = 1}; //print
+	
+	code[i++] = (struct Item){.operator = oHalt}; //end
 	
 	if(setjmp(err_ret)){
 		printf("error\n");
 		return 1;
 	}else{
 		while(1){
+			printf("working on item: %d\n",pos);
 			struct Item item = code[pos++];
 			//if(item == NULL)
 			//	break;
@@ -216,9 +237,9 @@ int main(){
 				break;
 			case oVariable:
 				if(item.scope) //local var
-					push(scope_stack[scope_stack_pointer-item.scope][item.index]);
+					push(scope_stack[scope_stack_pointer-item.scope][item.index].value);
 				else //global var
-					push(scope_stack[0][item.index]);
+					push(scope_stack[0][item.index].value);
 				break;
 			case oAdd:;
 				struct Value a = pop();
@@ -230,10 +251,9 @@ int main(){
 				}
 				break;
 			case oAssign:;
-				struct Value value = pop();
-				struct Value variable = pop();
-				//assign_variable(variable, value); (I don't think assigments happen anywhere but here)
-				variable.variable->value = value; 
+				printf("Going to do an =\n");
+				assign_variable(&variable, &value);
+				printf("Finished =\n");
 				break;
 			case oPrint:;
 				for(i = item.length;i>=1;i--){
@@ -249,13 +269,13 @@ int main(){
 						printf("function"); //maybe store the function name somewhere...
 						break;
 					case tBoolean:
-						if(a.boolean)
-							printf("true");
-						else
-							printf("false");
+						printf(a.boolean ? "true" : "false");
 						break;
 					case tTable:
 						printf("table");
+						break;
+					case tNone:
+						printf("None");
 					}
 					if(i!=1)
 						printf("\t");
@@ -278,7 +298,7 @@ int main(){
 				push((struct Value){.type = tTable, .table = table});
 				break;
 			// Array literal
-			case oArray:
+			case oArray:;
 				struct Array * array = allocate_array(item.length);
 				for(i = item.length;i>=1;i--)
 					array->pointer[i].value = stack_get(i);
@@ -305,6 +325,17 @@ int main(){
 					die("Tried to index something that wasn't a table or an array\n"); // etoyr viyr rttpt zrddshrd !
 				}
 				break;
+			case oDeclare:;
+				{
+					struct Variable * variable;
+					if(item.scope) //local var
+						variable = &(scope_stack[scope_stack_pointer-item.scope][item.index]);
+					else //global var
+						variable = &(scope_stack[0][item.index]);
+					variable->value = pop();
+					variable->value.variable = variable;
+				}
+				break;
 			case oCall:
 				call(item.address);
 				break;
@@ -321,6 +352,16 @@ int main(){
 				//garbage collect here
 				pop_scope();
 				break;
+			//when a function is entered, this is used to set the value of the argument variables
+			case oMultiAssign:{
+				struct Variable * scope = scope_stack[scope_stack_pointer-1];
+				int args = pop().args; // number of inputs which were passed to the function
+				if(args<=item.length) //right number of arguments, or fewer
+					for(int i=0;i<args;i++)
+						assign_variable(&scope[i], &pop());
+				else //too many args
+					die("That's too many!\n");
+			}break;
 			default:
 				die("Unsupported operator\n");
 			}
@@ -364,11 +405,12 @@ int main(){
 
 //calling a function
 //DEF TEST(A,B,C):END:TEST(1,2,3) is compiled to
-//1 2 3 3(because 3 arguments were passed) TEST CALL ... @TEST PUSHSCOPE{3} VAR{A} VAR{B} VAR{C} MULTIASSIGN{3}
+//1 2 3 3(because 3 arguments were passed) TEST CALL ... @TEST PUSHSCOPE{3} MULTIASSIGN{3}
 //CALL pops a function from the stack and calls it.
 //PUSHSCOPE pushes a scope to the scope stack, creating the right number of local variables. in this case it's 3 (because arguments are local vars)
 //MULTIASSIGN will perform multiple assignments. first it reads the stack entry before the variable list, which is the number of arguments that were passed.
 // it then assigns values to the variables, and discards everything on the stack (up to the first value passed to the function)
+// The first variables in the function scope are the function arguments. Multiassign can infer their indexes based on the number of parameters to that function.
 
 //pushing to the scope stack:
 // this will create lots of new variables
@@ -380,17 +422,17 @@ int main(){
 //-- push that to the stack.
 
 //recursion idea:
-VAR A
-DEF X
- VAR B
- DEF Y
-  VAR C
-  B = 1
- END
- Y
-END
+// VAR A
+// DEF X
+ // VAR B
+ // DEF Y
+  // VAR C
+  // B = 1
+ // END
+ // Y
+// END
 
-X
+// X
 
 // X is called
 //  new scope is created
