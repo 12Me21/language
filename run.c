@@ -79,10 +79,9 @@ enum Operator {
 	oScope,
 	oArray,
 	oCall,
-	oRet,
 	oDiscard,
 	oReturn,
-	oDeclare,
+	oMultiAssign,
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be a Value, with a special [type]
@@ -105,10 +104,10 @@ struct Array * allocate_array(int length){
 	return ALLOC_INIT(struct Array, {.pointer = malloc(sizeof(struct Variable) * length), .length = length});
 }
 
-void assign_variable(struct Value * variable, struct Value * value){
-	struct Variable * old_var_ptr = variable->variable;
-	variable->variable->value = *value;
-	variable->variable->value.variable = old_var_ptr;
+void assign_variable(struct Variable * variable, struct Value value){
+	struct Variable * old_var_ptr = variable;
+	variable->value = value;
+	variable->value.variable = old_var_ptr;
 	//TODO: check constraint
 }
 
@@ -151,7 +150,8 @@ void push_scope(int locals){
 	if(scope_stack_pointer >= SCOPE_STACK_SIZE)
 		die("Scope Stack Overflow\n");
 	struct Variable * scope = scope_stack[scope_stack_pointer++] = malloc(sizeof(struct Variable) * locals);
-	for(int i=0;i<locals;i++)
+	int i;
+	for(i=0;i<locals;i++)
 		make_variable(&scope[i]);
 }
 
@@ -213,6 +213,8 @@ int main(){
 	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 1}; //Y
 	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 6}}; //6
 	code[i++] = (struct Item){.operator = oAssign}; //=
+	//new scope
+	code[i++] = (struct Item){.operator = oScope, .locals = 0};
 	//print X+Y
 	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0}; //X
 	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 1}; //Y
@@ -251,9 +253,9 @@ int main(){
 				}
 				break;
 			case oAssign:;
-				printf("Going to do an =\n");
-				assign_variable(&variable, &value);
-				printf("Finished =\n");
+				struct Value value = pop();
+				struct Value variable = pop();
+				assign_variable(variable.variable, value);
 				break;
 			case oPrint:;
 				for(i = item.length;i>=1;i--){
@@ -273,6 +275,9 @@ int main(){
 						break;
 					case tTable:
 						printf("table");
+						break;
+					case tArray:
+						printf("array");
 						break;
 					case tNone:
 						printf("None");
@@ -325,22 +330,8 @@ int main(){
 					die("Tried to index something that wasn't a table or an array\n"); // etoyr viyr rttpt zrddshrd !
 				}
 				break;
-			case oDeclare:;
-				{
-					struct Variable * variable;
-					if(item.scope) //local var
-						variable = &(scope_stack[scope_stack_pointer-item.scope][item.index]);
-					else //global var
-						variable = &(scope_stack[0][item.index]);
-					variable->value = pop();
-					variable->value.variable = variable;
-				}
-				break;
 			case oCall:
 				call(item.address);
-				break;
-			case oRet:
-				ret();
 				break;
 			case oDiscard: //used after calling functions where the return value is not used.
 				pop();
@@ -351,14 +342,16 @@ int main(){
 			case oReturn:
 				//garbage collect here
 				pop_scope();
+				ret();
 				break;
 			//when a function is entered, this is used to set the value of the argument variables
 			case oMultiAssign:{
 				struct Variable * scope = scope_stack[scope_stack_pointer-1];
 				int args = pop().args; // number of inputs which were passed to the function
+				int i;
 				if(args<=item.length) //right number of arguments, or fewer
-					for(int i=0;i<args;i++)
-						assign_variable(&scope[i], &pop());
+					for(i=0;i<args;i++)
+						assign_variable(scope+i, pop());
 				else //too many args
 					die("That's too many!\n");
 			}break;
@@ -497,7 +490,10 @@ int main(){
 //	.function = 2
 //	.vars
 
-//check worry about this later
+//worry about this later
+
+//There might be a "symbol" type specifically for properties. ex "table.x" compiles to: [table] [.x] [index] not [table] ["x"] [index] to improve efficiency.
+
 
 //You... did read all that... right?
 //Oh... well, I'm sure you knew it already...
