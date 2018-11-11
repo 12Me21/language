@@ -306,7 +306,7 @@ int main(){
 			case oArray:;
 				struct Array * array = allocate_array(item.length);
 				for(i = item.length;i>=1;i--)
-					array->pointer[i].value = stack_get(i);
+					array->pointer[i].value = stack_get(i); //this might be backwards, test!
 				stack_discard(item.length);
 				push((struct Value){.type = tArray, .array = array});
 			// Array/Table access
