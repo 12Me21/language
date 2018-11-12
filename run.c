@@ -82,6 +82,7 @@ enum Operator {
 	oDiscard,
 	oReturn,
 	oMultiAssign,
+	oJump,
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be a Value, with a special [type]
@@ -103,7 +104,6 @@ struct Item {
 struct Array * allocate_array(int length){
 	return ALLOC_INIT(struct Array, {.pointer = malloc(sizeof(struct Variable) * length), .length = length});
 }
-
 void assign_variable(struct Variable * variable, struct Value value){
 	struct Variable * old_var_ptr = variable;
 	variable->value = value;
@@ -141,11 +141,11 @@ unsigned int scope_stack_pointer = 0;
 
 Address pos = 0;
 
+//calling and scope functions
 void make_variable(struct Variable * variable){
 	variable->value = (struct Value){.type = tNone};
 	variable->value.variable = variable;
 }
-
 void push_scope(int locals){
 	if(scope_stack_pointer >= SCOPE_STACK_SIZE)
 		die("Scope Stack Overflow\n");
@@ -154,74 +154,109 @@ void push_scope(int locals){
 	for(i=0;i<locals;i++)
 		make_variable(&scope[i]);
 }
-
 void pop_scope(){
 	if(scope_stack_pointer <= 0)
 		die("Internal Error: Scope Stack Underflow\n");
-	free(scope_stack[--call_stack_pointer]);
+	free(scope_stack[--scope_stack_pointer]);
 }
-
 void call(Address address){
 	if(call_stack_pointer >= CALL_STACK_SIZE)
 		die("Call Stack Overflow\n");
 	call_stack[call_stack_pointer++] = pos;
 	pos = address;
 }
-
 void ret(){
 	if(call_stack_pointer <= 0)
 		die("Internal Error: Call Stack Underflow\n");
-	pos = call_stack[--call_stack_pointer];
+	pos = call_stack[--call_stack_pointer]+1;
 }
 
+//Main stack functions
 void push(struct Value value){
 	if(stack_pointer >= STACK_SIZE)
 		die("Stack Overflow\n");
 	stack[stack_pointer++] = value;
 }
-
 struct Value pop(){
 	if(stack_pointer <= 0)
 		die("Internal Error: Stack Underflow\n");
 	return stack[--stack_pointer];
 }
-
 struct Value stack_get(int depth){
 	if(stack_pointer-depth < 0)
 		die("Internal Error: Stack Underflow\n");
 	return stack[stack_pointer-depth];
 }
-
 void stack_discard(int amount){
 	if(stack_pointer-amount < 0)
 		die("Internal Error: Stack Underflow\n");
 	stack_pointer -= amount;
 }
 
+//check if a Value is truthy
+bool truthy(struct Value value){
+	if(value.type == tNone)
+		return false;
+	if(value.type == tBoolean)
+		return value.boolean;
+	return true;
+}
+
+void basic_print(struct Value value){
+	switch(value.type){
+	case tNumber:
+		printf("%g", value.number);
+		break;
+	case tString:
+		fwrite(value.string->pointer, sizeof(char), value.string->length, stdout);
+		break;
+	case tFunction:
+		printf("function"); //maybe store the function name somewhere...
+		break;
+	case tBoolean:
+		printf(value.boolean ? "true" : "false");
+		break;
+	case tTable:
+		printf("table");
+		break;
+	case tArray:;
+		int i;
+		printf("[");
+		for(i=0;i<value.array->length;i++){
+			if(i)
+				printf(",");
+			basic_print(value.array->pointer[i].value);
+		}
+		printf("]");
+		break;
+	case tNone:
+		printf("None");
+	}
+}
+
 #include "table.c"
 
 int main(){
 	
-	unsigned int i=0;
+	int i=0;
+	//DEF TEST(A,B,C):END:TEST(1,2,3) is compiled to
+	//1 2 3 3(because 3 arguments were passed) TEST CALL ... @TEST PUSHSCOPE{3} MULTIASSIGN{3}
 	
-	code[i++] = (struct Item){.operator = oScope, .locals = 2}; //(2 variables)
-	//X=4
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0}; //X
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 4}}; //4
-	code[i++] = (struct Item){.operator = oAssign}; // =
-	//Y=6
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 1}; //Y
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 6}}; //6
-	code[i++] = (struct Item){.operator = oAssign}; //=
-	//new scope
-	code[i++] = (struct Item){.operator = oScope, .locals = 0};
-	//print X+Y
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0}; //X
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 1}; //Y
-	code[i++] = (struct Item){.operator = oAdd}; //+
-	code[i++] = (struct Item){.operator = oPrint, .length = 1}; //print
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 4}};
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 5}};
+	code[i++] = (struct Item){.operator = oConstant, .value = {.args = 2}};
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tFunction, .function = 7}};
+	code[i++] = (struct Item){.operator = oCall};
+	code[i++] = (struct Item){.operator = oDiscard};
 	
 	code[i++] = (struct Item){.operator = oHalt}; //end
+	code[i++] = (struct Item){.operator = oScope, .locals = 2};
+	code[i++] = (struct Item){.operator = oMultiAssign, .length = 2};
+	code[i++] = (struct Item){.operator = oVariable, .scope = 1, .index = 0};
+	code[i++] = (struct Item){.operator = oVariable, .scope = 1, .index = 1};
+	code[i++] = (struct Item){.operator = oAdd};
+	code[i++] = (struct Item){.operator = oPrint, .length = 1};
+	code[i++] = (struct Item){.operator = oReturn};
 	
 	if(setjmp(err_ret)){
 		printf("error\n");
@@ -260,28 +295,7 @@ int main(){
 			case oPrint:;
 				for(i = item.length;i>=1;i--){
 					a = stack_get(i);
-					switch(a.type){
-					case tNumber:
-						printf("%g", a.number);
-						break;
-					case tString:
-						fwrite(a.string->pointer, sizeof(char), a.string->length, stdout);
-						break;
-					case tFunction:
-						printf("function"); //maybe store the function name somewhere...
-						break;
-					case tBoolean:
-						printf(a.boolean ? "true" : "false");
-						break;
-					case tTable:
-						printf("table");
-						break;
-					case tArray:
-						printf("array");
-						break;
-					case tNone:
-						printf("None");
-					}
+					basic_print(a);
 					if(i!=1)
 						printf("\t");
 				}
@@ -305,10 +319,11 @@ int main(){
 			// Array literal
 			case oArray:;
 				struct Array * array = allocate_array(item.length);
-				for(i = item.length;i>=1;i--)
-					array->pointer[i].value = stack_get(i); //this might be backwards, test!
-				stack_discard(item.length);
+				for(i = item.length-1;i>=0;i--){
+					array->pointer[i].value = pop();
+				}
 				push((struct Value){.type = tArray, .array = array});
+				break;
 			// Array/Table access
 			case oIndex:; //table, key
 				b = pop(); //key
@@ -331,7 +346,10 @@ int main(){
 				}
 				break;
 			case oCall:
-				call(item.address);
+				a = pop();
+				if(a.type != tFunction)
+					die("you can't call that\n");
+				call(a.function);
 				break;
 			case oDiscard: //used after calling functions where the return value is not used.
 				pop();
@@ -343,6 +361,9 @@ int main(){
 				//garbage collect here
 				pop_scope();
 				ret();
+				break;
+			case oJump:
+				pos = item.address;
 				break;
 			//when a function is entered, this is used to set the value of the argument variables
 			case oMultiAssign:{
@@ -404,6 +425,8 @@ int main(){
 //MULTIASSIGN will perform multiple assignments. first it reads the stack entry before the variable list, which is the number of arguments that were passed.
 // it then assigns values to the variables, and discards everything on the stack (up to the first value passed to the function)
 // The first variables in the function scope are the function arguments. Multiassign can infer their indexes based on the number of parameters to that function.
+
+//the parser must put the function after the args, somehow.
 
 //pushing to the scope stack:
 // this will create lots of new variables
@@ -493,6 +516,17 @@ int main(){
 //worry about this later
 
 //There might be a "symbol" type specifically for properties. ex "table.x" compiles to: [table] [.x] [index] not [table] ["x"] [index] to improve efficiency.
+
+//constraints:
+//A = B
+//A B =
+//1: push value A to the stack
+//2: push B
+//=
+//3: CALL constraint expression (don't pop)
+//4: constraint expressions end with a special RETURN call which pops a value, throws an error if false, then does the assignment
+
+//idea: some way to access keys in a table with a number. they are stored in an ordered list, after all. perhaps table:key(x) idk. to make iteration etc. easier
 
 
 //You... did read all that... right?

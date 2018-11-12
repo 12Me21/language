@@ -2,6 +2,7 @@ struct Entry {
 	struct Variable variable;
 	size_t key_size;
 	char * key;
+	unsigned char key_type;
 	struct Entry * next;
 };
 
@@ -44,12 +45,12 @@ struct Entry * table_get(struct Table * table, struct Value key, bool add){
 	
 	struct Entry * current = table->first;
 	while(current){
-		if(current->key_size == key_size && !memcmp(current->key, key_data, key_size))
+		if(current->key_size == key_size && current->key_type==key.type && !memcmp(current->key, key_data, key_size))
 			return current;
 		current=current->next;
 	}
 	if(add){
-		current = ALLOC_INIT(struct Entry, {.key_size = key_size, .key = memdup(key_data, key_size), .next = NULL});
+		current = ALLOC_INIT(struct Entry, {.key_size = key_size, .key_type = key.type, .key = memdup(key_data, key_size), .next = NULL});
 		if(table->last){
 			table->last->next = current;
 			table->last = current;
@@ -60,6 +61,9 @@ struct Entry * table_get(struct Table * table, struct Value key, bool add){
 	}
 	return NULL;
 }
+//ok so when you access table.key, that should be fast, of course. .key should be a symbol, not a string
+//but it is expected that table.key == table["key"] ...
+//maybe make strings also check symbols too?
 
 //returns a reference to the Variable stored at an index in a table.
 //(Its value can be read/written)
