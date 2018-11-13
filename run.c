@@ -20,6 +20,8 @@ enum Type {
 	tNone,
 };
 
+char * type_name[] = { "Number", "String", "Table", "Array", "Function", "Boolean", "None" };
+
 // Multiple things may point to the same String or Table
 struct String {
 	char * pointer;
@@ -245,21 +247,12 @@ int main(){
 	//DEF TEST(A,B,C):END:TEST(1,2,3) is compiled to
 	//1 2 3 3(because 3 arguments were passed) TEST CALL ... @TEST PUSHSCOPE{3} MULTIASSIGN{3}
 	
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 4}};
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tBoolean, .boolean = false}};
+	code[i++] = (struct Item){.operator = oLogicalAnd, .address = 3};
 	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 5}};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.args = 2}};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tFunction, .function = 7}};
-	code[i++] = (struct Item){.operator = oCall};
-	code[i++] = (struct Item){.operator = oDiscard};
-	
-	code[i++] = (struct Item){.operator = oHalt}; //end
-	code[i++] = (struct Item){.operator = oScope, .locals = 2};
-	code[i++] = (struct Item){.operator = oMultiAssign, .length = 2};
-	code[i++] = (struct Item){.operator = oVariable, .scope = 1, .index = 0};
-	code[i++] = (struct Item){.operator = oVariable, .scope = 1, .index = 1};
-	code[i++] = (struct Item){.operator = oAdd};
+	code[i++] = (struct Item){.operator = oLength};
 	code[i++] = (struct Item){.operator = oPrint, .length = 1};
-	code[i++] = (struct Item){.operator = oReturn};
+	code[i++] = (struct Item){.operator = oHalt};
 	
 	if(setjmp(err_ret)){
 		printf("error\n");
