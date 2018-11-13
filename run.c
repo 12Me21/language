@@ -83,6 +83,9 @@ enum Operator {
 	oReturn,
 	oMultiAssign,
 	oJump,
+	oLogicalOr,
+	oLogicalAnd,
+	oLength,
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be a Value, with a special [type]
@@ -271,13 +274,13 @@ int main(){
 			switch(item.operator){
 			case oConstant:
 				push(item.value);
-				break;
+			break;
 			case oVariable:
 				if(item.scope) //local var
 					push(scope_stack[scope_stack_pointer-item.scope][item.index].value);
 				else //global var
 					push(scope_stack[0][item.index].value);
-				break;
+			break;
 			case oAdd:;
 				struct Value a = pop();
 				struct Value b = pop();
@@ -286,12 +289,12 @@ int main(){
 				}else{
 					die("Type mismatch in +\n");
 				}
-				break;
+			break;
 			case oAssign:;
 				struct Value value = pop();
 				struct Value variable = pop();
 				assign_variable(variable.variable, value);
-				break;
+			break;
 			case oPrint:;
 				for(i = item.length;i>=1;i--){
 					a = stack_get(i);
@@ -301,7 +304,7 @@ int main(){
 				}
 				stack_discard(item.length);
 				printf("\n");
-				break;
+			break;
 			//End of program
 			case oHalt:
 				goto end;
@@ -315,7 +318,7 @@ int main(){
 					table_declare(table, b, ALLOC_INIT(struct Variable, {.value = a}));
 				}
 				push((struct Value){.type = tTable, .table = table});
-				break;
+			break;
 			// Array literal
 			case oArray:;
 				struct Array * array = allocate_array(item.length);
@@ -323,7 +326,7 @@ int main(){
 					array->pointer[i].value = pop();
 				}
 				push((struct Value){.type = tArray, .array = array});
-				break;
+			break;
 			// Array/Table access
 			case oIndex:; //table, key
 				b = pop(); //key
@@ -344,27 +347,27 @@ int main(){
 				default:
 					die("Tried to index something that wasn't a table or an array\n"); // etoyr viyr rttpt zrddshrd !
 				}
-				break;
+			break;
 			case oCall:
 				a = pop();
 				if(a.type != tFunction)
 					die("you can't call that\n");
 				call(a.function);
-				break;
+			break;
 			case oDiscard: //used after calling functions where the return value is not used.
 				pop();
-				break;
+			break;
 			case oScope:
 				push_scope(item.locals);
-				break;
+			break;
 			case oReturn:
 				//garbage collect here
 				pop_scope();
 				ret();
-				break;
+			break;
 			case oJump:
 				pos = item.address;
-				break;
+			break;
 			//when a function is entered, this is used to set the value of the argument variables
 			case oMultiAssign:{
 				struct Variable * scope = scope_stack[scope_stack_pointer-1];
@@ -376,6 +379,36 @@ int main(){
 				else //too many args
 					die("That's too many!\n");
 			}break;
+			case oLogicalOr:
+				if(truthy(stack_get(1)))
+					pos = item.address;
+				else
+					stack_discard(1);
+			break;
+			case oLogicalAnd:
+				if(truthy(stack_get(1)))
+					stack_discard(1);
+				else
+					pos = item.address;
+			break;
+			case oLength:
+				a = pop();
+				unsigned int length;
+				switch(a.type){
+					case tArray:
+						length = a.array->length;
+					break;
+					case tString:
+						length = a.string->length;
+					break;
+					case tTable:
+						length = table_length(a.table);
+					break;
+					default:
+						die("That type doesn't have a length (just like your dick lmao)");
+				}
+				push((struct Value){.type = tNumber, .number = (double)length});
+			break;
 			default:
 				die("Unsupported operator\n");
 			}
@@ -385,6 +418,33 @@ int main(){
 	printf("stopped\n");
 	return 0;
 }
+
+// calling a function:
+// <args> <# of args> <function> CALL 
+//function:
+// <pushscope # of local vars> <multiassign # of args>
+
+//1: push args to stack
+//2: push # of args to stack
+//3: push function pointer to stack
+//4: CALL:
+//4.1: push current pos to call stack
+//4.2: pop function pointer and jump
+//5: pushscope creates scope
+//6: multiassign pops arguments and assigns them to local vars
+
+//where are constraint expressions stored?
+
+
+
+// A or B
+
+// (A) (check top of stack. if true, skip to @SKIP, otherwise discard) (B) (@SKIP)
+
+// A and B
+ 
+// (A) (check top of stack. if falsey, skip to @skip, otherwise discard) (B) (@SKIP)
+
 
 //important:
 //make sure that values don't contain direct pointers to strings/tables since they might need to be re-allocated.
@@ -527,7 +587,3 @@ int main(){
 //4: constraint expressions end with a special RETURN call which pops a value, throws an error if false, then does the assignment
 
 //idea: some way to access keys in a table with a number. they are stored in an ordered list, after all. perhaps table:key(x) idk. to make iteration etc. easier
-
-
-//You... did read all that... right?
-//Oh... well, I'm sure you knew it already...

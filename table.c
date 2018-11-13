@@ -61,6 +61,16 @@ struct Entry * table_get(struct Table * table, struct Value key, bool add){
 	}
 	return NULL;
 }
+
+unsigned int table_length(struct Table * table){
+	unsigned int length=0;
+	struct Entry * current = table->first;
+	while(current){
+		length++;
+		current=current->next;
+	}
+	return length;
+}
 //ok so when you access table.key, that should be fast, of course. .key should be a symbol, not a string
 //but it is expected that table.key == table["key"] ...
 //maybe make strings also check symbols too?
