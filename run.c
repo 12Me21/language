@@ -49,7 +49,13 @@ struct Value {
 		struct String * string;
 		struct Table * table;
 		struct Array * array;
-		Address function;
+		struct {
+			union {
+				Address user_function;
+				void (*c_function)(uint);
+			};
+			bool builtin;
+		};
 		bool boolean;
 		int args;
 	};
@@ -96,6 +102,7 @@ enum Operator {
 	oLength,
 	oJumpFalse,
 	oJumpTrue,
+	oFunctionInfo,
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be a Value, with a special [type]
@@ -105,11 +112,14 @@ struct Item {
 		struct Value value;
 		Address address; //index in bytecode
 		struct { //variable
-			unsigned int scope;
-			unsigned int index;
+			uint scope;
+			uint index;
 		};
-		unsigned int length; //generic length
-		unsigned int locals; //# of local variables in a scope
+		uint length; //generic length
+		struct {
+			uint locals; //# of local variables in a scope
+			uint inputs; //# of inputs to a function
+		};
 	};
 	//uint line;
 	//uint column;
@@ -146,7 +156,6 @@ struct Value stack[STACK_SIZE];
 uint32_t stack_pointer = 0;
 
 
-//struct Variable variables[256];
 struct Item code[65536];
 Address call_stack[256];
 uint32_t call_stack_pointer = 0;
@@ -155,36 +164,6 @@ unsigned int scope_stack_pointer = 0;
 
 Address pos = 0;
 struct Item item;
-
-//calling and scope functions
-void make_variable(struct Variable * variable){
-	variable->value = (struct Value){.type = tNone};
-	variable->value.variable = variable;
-}
-void push_scope(int locals){
-	if(scope_stack_pointer >= SCOPE_STACK_SIZE)
-		die("Scope Stack Overflow\n");
-	struct Variable * scope = scope_stack[scope_stack_pointer++] = malloc(sizeof(struct Variable) * locals);
-	int i;
-	for(i=0;i<locals;i++)
-		make_variable(&scope[i]);
-}
-void pop_scope(){
-	if(scope_stack_pointer <= 0)
-		die("Internal Error: Scope Stack Underflow\n");
-	free(scope_stack[--scope_stack_pointer]);
-}
-void call(Address address){
-	if(call_stack_pointer >= CALL_STACK_SIZE)
-		die("Call Stack Overflow\n");
-	call_stack[call_stack_pointer++] = pos;
-	pos = address;
-}
-void ret(){
-	if(call_stack_pointer <= 0)
-		die("Internal Error: Call Stack Underflow\n");
-	pos = call_stack[--call_stack_pointer]+1;
-}
 
 //Main stack functions
 void push(struct Value value){
@@ -208,12 +187,60 @@ void stack_discard(int amount){
 	stack_pointer -= amount;
 }
 
+//calling and scope functions
+void make_variable(struct Variable * variable){
+	variable->value = (struct Value){.type = tNone};
+	variable->value.variable = variable;
+}
+struct Variable * push_scope(int locals){
+	if(scope_stack_pointer >= SCOPE_STACK_SIZE)
+		die("Scope Stack Overflow\n");
+	struct Variable * scope = scope_stack[scope_stack_pointer++] = malloc(sizeof(struct Variable) * locals);
+	int i;
+	for(i=0;i<locals;i++)
+		make_variable(&scope[i]);
+	return scope;
+}
+void pop_scope(){
+	if(scope_stack_pointer <= 0)
+		die("Internal Error: Scope Stack Underflow\n");
+	free(scope_stack[--scope_stack_pointer]);
+}
+void call_user_function(Address address, uint inputs){
+	if(call_stack_pointer >= CALL_STACK_SIZE)
+		die("Call Stack Overflow\n");
+	call_stack[call_stack_pointer++] = pos;
+	//check function info
+	if(code[address].operator != oFunctionInfo)
+		die("Internal error: Could not call function because function info is missing\n");
+	//create scope
+	struct Variable * scope = push_scope(code[address].locals);
+	//assign values to input variables
+	uint i;
+	if(inputs <= code[address].inputs) //right number of arguments, or fewer
+		for(i=0;i<inputs;i++)
+			assign_variable(scope+i, pop());
+	else //too many args
+		die("That's too many!\n");
+	//jump
+	pos = address + 1;
+	pop(); //remove function itself
+}
+void ret(){
+	if(call_stack_pointer <= 0)
+		die("Internal Error: Call Stack Underflow\n");
+	pos = call_stack[--call_stack_pointer]+1;
+}
+
 //check if a Value is truthy
 bool truthy(struct Value value){
+	//printf("truth check type %d\n",value.type);
 	if(value.type == tNone)
 		return false;
 	if(value.type == tBoolean)
 		return value.boolean;
+	if(value.type == tNArgs)
+		die("internal error\n");
 	return true;
 }
 
@@ -244,6 +271,7 @@ void basic_print(struct Value value){
 }
 
 #include "table.c"
+#include "builtins.c"
 
 int main(){
 	uint i=0;
@@ -264,29 +292,29 @@ int main(){
 	code[i++] = (struct Item){.operator = oAdd};
 	code[i++] = (struct Item){.operator = oAssign};
 	
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = true, .c_function = &divisible_by}};
 	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
 	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 15}};
-	code[i++] = (struct Item){.operator = oMod};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 0}};
-	code[i++] = (struct Item){.operator = oEquals};
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 2}};
+	code[i++] = (struct Item){.operator = oCall};
 	code[i++] = (struct Item){.operator = oJumpFalse, .address = 17};
 	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tString, .string = &(struct String){.pointer = &(char[]){'f','i','z','z','b','u','z','z'}, .length=8}}};
 	code[i++] = (struct Item){.operator = oJump, .address = 34};
 	
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = true, .c_function = &divisible_by}};
 	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
 	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 3}};
-	code[i++] = (struct Item){.operator = oMod};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 0}};
-	code[i++] = (struct Item){.operator = oEquals};
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 2}};
+	code[i++] = (struct Item){.operator = oCall};
 	code[i++] = (struct Item){.operator = oJumpFalse, .address = 25};
 	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tString, .string = &(struct String){.pointer = &(char[]){'f','i','z','z'},.length=4}}};
 	code[i++] = (struct Item){.operator = oJump, .address = 34};
 	
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = true, .c_function = &divisible_by}};
 	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
 	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 5}};
-	code[i++] = (struct Item){.operator = oMod};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 0}};
-	code[i++] = (struct Item){.operator = oEquals};	
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 2}};
+	code[i++] = (struct Item){.operator = oCall};
 	code[i++] = (struct Item){.operator = oJumpFalse, .address = 33};
 	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tString, .string = &(struct String){.pointer = &(char[]){'b','u','z','z'},.length=4}}};
 	code[i++] = (struct Item){.operator = oJump, .address = 34};
@@ -419,16 +447,25 @@ int main(){
 					// etoyr viyr rttpt zrddshrd !
 				}
 			//Call function.
-			//Input: <function> <args> <# of args> |
+			//Input: <function> <args> <# of args>
+			//Output (builtin): <return value>
+			//Output (user): 
+			//Output (user, after return): <return value>
 			break;case oCall:
-				a = stack_get(1);
-				if(a.type != tNArgs){
+				a = pop();
+				if(a.type != tNArgs)
 					die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
-				}
-				a = stack_get(a.args+2);
+				uint args = a.args;
+				
+				a = stack_get(args+1); //get "function" value
 				if(a.type != tFunction)
 					die("Tried to call a %s as a function\n", type_name[a.type]);
-				call(a.function);
+				if(a.builtin)
+					//c functions should pop the inputs + 1 extra item from the stack.
+					//and push the return value.
+					(*(a.c_function))(args);
+				else
+					call_user_function(a.user_function, args);
 			//Discard value from stack
 			//Input: <values ...>
 			break;case oDiscard: //used after calling functions where the return value is not used.
@@ -452,13 +489,17 @@ int main(){
 			//Jump if false
 			//Input: <condition>
 			break;case oJumpFalse:
-				if(!truthy(pop()))
+				if(!truthy(pop()))//{
+					//printf("Jump false jumping\n");
 					pos = item.address;
+				//}else{
+				//	printf("Jump false not jumping\n");
+				//}
 			//Assign values of function input vars
 			//Input: <function> <args ...> <# of args>
 			break;case oMultiAssign:;
 				struct Variable * scope = scope_stack[scope_stack_pointer-1];
-				int args = pop().args; // number of inputs which were passed to the function
+				args = pop().args; // number of inputs which were passed to the function
 				if(args<=item.length) //right number of arguments, or fewer
 					for(i=0;i<args;i++)
 						assign_variable(scope+i, pop());
@@ -501,6 +542,9 @@ int main(){
 						die("Length operator expected String, Array, or Table; got %s.\n", type_name[a.type]);
 				}
 				push((struct Value){.type = tNumber, .number = (double)length});
+			//this should never run
+			break;case oFunctionInfo:
+				die("Internal error: Illegal function entry\n");
 			break;default:
 				die("Unsupported operator\n");
 			}
@@ -544,6 +588,17 @@ int main(){
 
 // FOR A = B TO C : D : NEXT
 //
+
+//bytecode structure:
+//<main><functions>
+//after bytecode is generated, function addresses must be inserted.
+
+// DEF A
+ // DEF B
+ // END
+// END
+//<A> <B>
+//how to insert B when A hasn't even finished?
 
 //important:
 //make sure that values don't contain direct pointers to strings/tables since they might need to be re-allocated.

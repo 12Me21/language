@@ -21,6 +21,7 @@ struct Table {
 struct Entry * table_get(struct Table * table, struct Value key, bool add){
 	char * key_data;
 	size_t key_size;
+	//this is very bad.
 	switch(key.type){
 	case tNumber:
 		key_data = (char *)&(key.number);
@@ -39,7 +40,7 @@ struct Entry * table_get(struct Table * table, struct Value key, bool add){
 		key_size = sizeof(bool);
 		break;
 	case tFunction:
-		key_data = (char *)&(key.function);
+		key_data = (char *)&(key.user_function); //bad
 		key_size = sizeof(Address);
 	}
 	
