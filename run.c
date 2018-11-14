@@ -20,6 +20,7 @@ enum Type {
 	tFunction,
 	tBoolean,
 	tNone,
+	tNArgs, //there could be a "list" type perhaps. implemented as <items ...> <# of items>
 };
 
 char * type_name[] = { "Number", "String", "Table", "Array", "Function", "Boolean", "None" };
@@ -294,7 +295,10 @@ int main(){
 	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
 	code[i++] = (struct Item){.operator = oPrint, .length = 1};
 	
-	code[i++] = (struct Item){.operator = oJump, .address = 4};
+	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
+	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 100}};
+	code[i++] = (struct Item){.operator = oLess};
+	code[i++] = (struct Item){.operator = oJumpTrue, .address = 4};
 	
 	code[i++] = (struct Item){.operator = oHalt};
 	
@@ -329,7 +333,6 @@ int main(){
 				}else{
 					die("Type mismatch in +\n");
 				}
-				
 			break;case oLess:;
 				b = pop();
 				a = pop();
@@ -416,10 +419,13 @@ int main(){
 					// etoyr viyr rttpt zrddshrd !
 				}
 			//Call function.
-			//Input: <function>
-			//Output: <return value>
+			//Input: <function> <args> <# of args> |
 			break;case oCall:
-				a = pop();
+				a = stack_get(1);
+				if(a.type != tNArgs){
+					die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
+				}
+				a = stack_get(a.args+2);
 				if(a.type != tFunction)
 					die("Tried to call a %s as a function\n", type_name[a.type]);
 				call(a.function);
@@ -449,7 +455,7 @@ int main(){
 				if(!truthy(pop()))
 					pos = item.address;
 			//Assign values of function input vars
-			//Input: <args ...> <# of args>
+			//Input: <function> <args ...> <# of args>
 			break;case oMultiAssign:;
 				struct Variable * scope = scope_stack[scope_stack_pointer-1];
 				int args = pop().args; // number of inputs which were passed to the function
@@ -458,6 +464,7 @@ int main(){
 						assign_variable(scope+i, pop());
 				else //too many args
 					die("That's too many!\n");
+				pop(); //remove function from stack
 			//Logical OR operator (with shortcutting)
 			//Input: <condition 1>
 			//Output: ?<condition 1>
@@ -505,7 +512,7 @@ int main(){
 }
 
 // calling a function:
-// <args> <# of args> <function> CALL 
+// <function> <args> <# of args> CALL 
 //function:
 // <pushscope # of local vars> <multiassign # of args>
 
@@ -534,6 +541,9 @@ int main(){
 
 // REPEAT A UNTIL B
 // @LOOP A B IFN(@LOOP)
+
+// FOR A = B TO C : D : NEXT
+//
 
 //important:
 //make sure that values don't contain direct pointers to strings/tables since they might need to be re-allocated.
