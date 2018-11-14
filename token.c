@@ -12,11 +12,19 @@ enum Token_Type {
 	tkRight_Bracket,
 	tkLeft_Brace,
 	tkRight_Brace,
-	tkSemiColon,
+	tkSemicolon,
 	tkColon,
 	tkComma,
 	tkKeyword,
+	tkWord,
+	tkEof,
 };
+
+int parse_error(char * message){
+	printf(message);
+	exit(1);
+	return 0;
+}
 
 struct Token {
 	enum Token_Type type;
@@ -26,6 +34,8 @@ struct Token {
 			enum Operator operator_1;
 			enum Operator operator_2;
 		};
+		int keyword;
+		int word;
 	};
 };
 
@@ -47,6 +57,7 @@ void next(){
 		c = getc(stream);
 	else
 		read_next = true;
+	printf("char: %c\n",c);
 }
 
 void init(FILE * new_stream){
@@ -67,7 +78,7 @@ enum Keyword { //reference to keywords list
 
 enum Soft_Keyword { //reference to nametable
 	kTo = 0, kStep,
-}
+};
 
 char * name_table[63356] = {"to", "step"};
 uint name_table_pointer = 0;
@@ -97,14 +108,12 @@ struct Token process_word(char * word){
 
 struct Token next_token(){
 	while(c == ' ' || c == '\t' || c == '\n'){
-		c = getc(stream);
+		next();
 	}
 	
-	if(c == EOF)
-		
 	switch(c){
 		case EOF:
-			return (struct Token){.type = tkEof}
+			return (struct Token){.type = tkEof};
 		case '0':
 		case '1':
 		case '2':
@@ -160,7 +169,7 @@ struct Token next_token(){
 				string_temp[length++] = c;
 				next();
 			}
-			return (struct Token){.type = tkValue, .value = {.type = tString, .string = {.pointer = memdup(string_temp, length * sizeof(char)), .length = length}}};
+			return (struct Token){.type = tkValue, .value = {.type = tString, .string = ALLOC_INIT(struct String, {.pointer = memdup(string_temp, length * sizeof(char)), .length = length})}};
 		case '~':
 			next();
 			return (struct Token){.type = tkOperator_12, .operator_1 = oBitwise_Not, .operator_2 = oBitwise_Xor};
@@ -195,6 +204,9 @@ struct Token next_token(){
 		case '+':
 			next();
 			return (struct Token){.type = tkOperator_2, .operator_2 = oAdd};
+		case '?':
+			next();
+			return (struct Token){.type = tkOperator_1, .operator_1 = oPrint1};
 		case '=':
 			next();
 			if(c=='='){
@@ -222,14 +234,14 @@ struct Token next_token(){
 			return (struct Token){.type = tkOperator_2, .operator_2 = oFloor_Divide};
 		case ';':
 			next();
-			return (struct Token){.type = oSemicolon};
+			return (struct Token){.type = tkSemicolon};
 		case ':':
 			next();
-			return (struct Token){.type = oColon};
+			return (struct Token){.type = tkColon};
 		case '\'':
 			do{
 				next();
-			}while(c!='\n' && c!=EOF)
+			}while(c!='\n' && c!=EOF);
 			return next_token();
 		//case '\n': ...
 		case '<':
@@ -258,17 +270,17 @@ struct Token next_token(){
 			return (struct Token){.type = tkComma};
 		case '/':
 			next();
-			return (struct Token){.type = tkDivide};
+			return (struct Token){.type = tkOperator_2, .operator_2 = oDivide};
 		default:
-			if(is_alpha(c) || c == "_"){
+			if(is_alpha(c) || c == '_'){
 				int length=0;
 				do{
 					string_temp[length++] = c;
 					next();
-				}while(is_alpha(c) || is_digit(c) || c == "_");
+				}while(is_alpha(c) || is_digit(c) || c == '_');
 				string_temp[length] = '\0';
 				return process_word(string_temp);
 			}
-			parse_error("Invalid character: %c", c);
+			parse_error("Invalid character");
 	}	
 }

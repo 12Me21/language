@@ -78,22 +78,45 @@ enum Operator {
 	oConstant,
 	oVariable,
 	
-	oAdd,
-	oLess,
+	//operators
+	oBitwise_Not,
+	oBitwise_Xor,
+	oNot_Equal,
+	oNot,
 	oMod,
-	oEquals,
+	oExponent,
+	oBitwise_And,
+	oMultiply,
+	oNegative,
+	oSubtract,
+	oAdd,
+	oEqual,
+	oAssign,
+	oBitwise_Or,
+	oFloor_Divide,
+	oLess_Or_Equal,
+	oLeft_Shift,
+	oLess,
+	oGreater_Or_Equal,
+	oRight_Shift,
+	oGreater,
+	oDivide,
+	oPrint1,
+	//More operators
+	oArray,
+	oIndex,
+	oCall,
+	oDiscard,
+	
 	
 	oPrint,
 	oTest,
-	oAssign,
 	oHalt,
 	oTable, //table literal.
 	//<key><value><key><value>...<oTable(# of items)>
-	oIndex,
+	
 	oScope,
-	oArray,
-	oCall,
-	oDiscard,
+	
 	oReturn,
 	oMultiAssign,
 	oJump,
@@ -158,7 +181,7 @@ struct Value stack[STACK_SIZE];
 uint32_t stack_pointer = 0;
 
 
-struct Item code[65536];
+struct Item * code;
 Address call_stack[256];
 uint32_t call_stack_pointer = 0;
 struct Variable * scope_stack[256];
@@ -245,6 +268,38 @@ bool truthy(struct Value value){
 		die("internal error\n");
 	return true;
 }
+struct Value make_boolean(bool boolean){
+	return (struct Value){.type = tBoolean, .boolean = boolean};
+}
+bool equal(struct Value a, struct Value b){
+	if(a.type == b.type){
+		switch(a.type){
+		case tNumber:
+			return a.number == b.number;
+		case tBoolean:
+			return a.boolean == b.boolean;
+		case tArray:
+			return a.array == b.array;
+		case tTable:
+			return a.table == b.table;
+		case tString:
+			return a.string->length == b.string->length && !memcmp(a.string->pointer, b.string->pointer, a.string->length * sizeof(char));
+		case tFunction:
+			if(a.builtin==b.builtin){
+				if(a.builtin)
+					return a.c_function == b.c_function;
+				else
+					return a.user_function == b.user_function;
+			}
+			break;
+		case tNone:
+			return true;
+		default:
+			die("Internal error: Type mismatch in comparison, somehow\n");
+		}
+	}
+	return false;
+}
 
 void basic_print(struct Value value){
 	switch(value.type){
@@ -275,62 +330,11 @@ void basic_print(struct Value value){
 #include "table.c"
 #include "builtins.c"
 
-int main(){
-	uint i=0;
-	//DEF TEST(A,B,C):END:TEST(1,2,3) is compiled to
-	//1 2 3 3(because 3 arguments were passed) TEST CALL ... @TEST PUSHSCOPE{3} MULTIASSIGN{3}
-	
-	//VAR X=0:REPEAT:X=X+1:PRINT X:WHILE X<10
-	
-	//VAR X=0
-	code[i++] = (struct Item){.operator = oScope, .locals = 1};
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 0}};
-	code[i++] = (struct Item){.operator = oAssign, .scope = 0, .index = 0};
-	//X=X+1
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 1}};
-	code[i++] = (struct Item){.operator = oAdd};
-	code[i++] = (struct Item){.operator = oAssign};
-	
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = true, .c_function = &divisible_by}};
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 15}};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 2}};
-	code[i++] = (struct Item){.operator = oCall};
-	code[i++] = (struct Item){.operator = oJumpFalse, .address = 17};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tString, .string = &(struct String){.pointer = &(char[]){'f','i','z','z','b','u','z','z'}, .length=8}}};
-	code[i++] = (struct Item){.operator = oJump, .address = 34};
-	
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = true, .c_function = &divisible_by}};
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 3}};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 2}};
-	code[i++] = (struct Item){.operator = oCall};
-	code[i++] = (struct Item){.operator = oJumpFalse, .address = 25};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tString, .string = &(struct String){.pointer = &(char[]){'f','i','z','z'},.length=4}}};
-	code[i++] = (struct Item){.operator = oJump, .address = 34};
-	
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = true, .c_function = &divisible_by}};
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 5}};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 2}};
-	code[i++] = (struct Item){.operator = oCall};
-	code[i++] = (struct Item){.operator = oJumpFalse, .address = 33};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tString, .string = &(struct String){.pointer = &(char[]){'b','u','z','z'},.length=4}}};
-	code[i++] = (struct Item){.operator = oJump, .address = 34};
-	
-	//PRINT X
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
-	code[i++] = (struct Item){.operator = oPrint, .length = 1};
-	
-	code[i++] = (struct Item){.operator = oVariable, .scope = 0, .index = 0};
-	code[i++] = (struct Item){.operator = oConstant, .value = {.type = tNumber, .number = 100}};
-	code[i++] = (struct Item){.operator = oLess};
-	code[i++] = (struct Item){.operator = oJumpTrue, .address = 4};
-	
-	code[i++] = (struct Item){.operator = oHalt};
+int run(struct Item * new_code){
+	code = new_code;
+	pos = 0;
+	//todo: reset other things
+	uint i = 0;
 	
 	if(setjmp(err_ret)){
 		printf("Error\n");
@@ -338,8 +342,9 @@ int main(){
 		return 1;
 	}else{
 		while(1){
-			//printf("working on item: %d\n",pos);
+			
 			item = code[pos++];
+			printf("working on item: %d, op %d\n",pos,item.operator);
 			switch(item.operator){
 			//Constant
 			//Output: <value>
@@ -348,51 +353,19 @@ int main(){
 			//Variable
 			//Output: <value>
 			break;case oVariable:
+				printf("variable %d %d",item.scope, item.index);
 				if(item.scope) //local var
 					push(scope_stack[scope_stack_pointer-item.scope][item.index].value);
 				else //global var
 					push(scope_stack[0][item.index].value);
-			//Addition
-			//Input: <arg1> <arg2>
-			//Output: <sum>
-			break;case oAdd:;
-				struct Value a = pop();
-				struct Value b = pop();
-				if(a.type == tNumber && b.type == tNumber){
-					push((struct Value){.type = tNumber, .number = a.number + b.number});
-				}else{
-					die("Type mismatch in +\n");
-				}
-			break;case oLess:;
-				b = pop();
-				a = pop();
-				if(a.type == tNumber && b.type == tNumber){
-					push((struct Value){.type = tBoolean, .boolean = a.number < b.number});
-				}else{
-					die("Type mismatch in <\n");
-				}
-			break;case oMod:;
-				b = pop();
-				a = pop();
-				if(a.type == tNumber && b.type == tNumber){
-					push((struct Value){.type = tNumber, .number = fmod(a.number, b.number)});
-				}else{
-					die("Type mismatch in %\n");
-				}
-			break;case oEquals:;
-				b = pop();
-				a = pop();
-				if(a.type == tNumber && b.type == tNumber){
-					push((struct Value){.type = tBoolean, .boolean = a.number == b.number});
-				}else{
-					die("Type mismatch in ==\n");
-				}
+			#include "operator.c"
 			//Assignment
 			//Input: <variable> <value>
 			break;case oAssign:;
 				struct Value value = pop();
 				struct Value variable = pop();
 				assign_variable(variable.variable, value);
+				push(value);
 			//Print
 			//Input: <args ...> <# of args>
 			break;case oPrint:;
@@ -415,7 +388,7 @@ int main(){
 				for(i = 0; i<item.length; i++){
 					a = pop();
 					b = pop();
-					table_declare(table, b, ALLOC_INIT(struct Variable, {.value = a}));					
+					table_declare(table, b, ALLOC_INIT(struct Variable, {.value = a}));
 				}
 				push((struct Value){.type = tTable, .table = table});
 			// Array literal
@@ -497,12 +470,8 @@ int main(){
 			//Jump if false
 			//Input: <condition>
 			break;case oJumpFalse:
-				if(!truthy(pop()))//{
-					//printf("Jump false jumping\n");
+				if(!truthy(pop()))
 					pos = item.address;
-				//}else{
-				//	printf("Jump false not jumping\n");
-				//}
 			//Assign values of function input vars
 			//Input: <function> <args ...> <# of args>
 			break;case oMultiAssign:;
