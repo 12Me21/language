@@ -49,4 +49,5 @@ break;case oGreater:
 break;case oDivide:
 break;case oPrint1:
 	basic_print(pop());
+	printf("\n");
 	push((struct Value){.type=tNone});

@@ -27,7 +27,7 @@ int priority[] = {
 	9,
 	8,
 	11,
-	2 ,
+	-1, //?
 	//More operators
 	oArray,
 	oIndex,
@@ -227,6 +227,9 @@ struct Item * parse(FILE * stream){
 			output((struct Item){.operator = oDiscard});
 			return true;
 		}else{
+			next();
+			if(token.type==tkSemicolon)
+				return true;
 			// next();
 			// switch(token.type){
 			// case

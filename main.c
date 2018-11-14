@@ -5,10 +5,7 @@
 int main(){
 	printf("A");
 	FILE * input = fopen("test.prg", "r");
-	printf("B");
 	struct Item * bytecode = parse(input);
-	printf("C");
 	run(bytecode);
-	printf("D");
 	return 0;
 }

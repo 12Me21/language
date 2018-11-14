@@ -106,7 +106,7 @@ enum Operator {
 	oArray,
 	oIndex,
 	oCall,
-	oDiscard,
+	oDiscard, //29
 	
 	
 	oPrint,
@@ -150,16 +150,6 @@ struct Item {
 	//uint column;
 };
 
-struct Array * allocate_array(int length){
-	return ALLOC_INIT(struct Array, {.pointer = malloc(sizeof(struct Variable) * length), .length = length});
-}
-void assign_variable(struct Variable * variable, struct Value value){
-	struct Variable * old_var_ptr = variable;
-	variable->value = value;
-	variable->value.variable = old_var_ptr;
-	//TODO: check constraint
-}
-
 //ideally:
 // code item:
 // - operator type / value type
@@ -180,6 +170,18 @@ void assign_variable(struct Variable * variable, struct Value value){
 struct Value stack[STACK_SIZE];
 uint32_t stack_pointer = 0;
 
+struct Array * allocate_array(int length){
+	return ALLOC_INIT(struct Array, {.pointer = malloc(sizeof(struct Variable) * length), .length = length});
+}
+void assign_variable(struct Variable * variable, struct Value value){
+	//printf("var assign");
+	if(!variable)
+		die("Can't set the value of whatever the heck that is\n");
+	struct Variable * old_var_ptr = variable;
+	variable->value = value;
+	variable->value.variable = old_var_ptr;
+	//TODO: check constraint
+}
 
 struct Item * code;
 Address call_stack[256];
@@ -335,6 +337,7 @@ int run(struct Item * new_code){
 	pos = 0;
 	//todo: reset other things
 	uint i = 0;
+	printf("Starting \n\n");
 	
 	if(setjmp(err_ret)){
 		printf("Error\n");
@@ -344,7 +347,7 @@ int run(struct Item * new_code){
 		while(1){
 			
 			item = code[pos++];
-			printf("working on item: %d, op %d\n",pos,item.operator);
+			//printf("working on item: %d, op %d\n",pos,item.operator);
 			switch(item.operator){
 			//Constant
 			//Output: <value>
@@ -353,7 +356,7 @@ int run(struct Item * new_code){
 			//Variable
 			//Output: <value>
 			break;case oVariable:
-				printf("variable %d %d",item.scope, item.index);
+				//printf("variable %d %d",item.scope, item.index);
 				if(item.scope) //local var
 					push(scope_stack[scope_stack_pointer-item.scope][item.index].value);
 				else //global var
@@ -528,7 +531,7 @@ int run(struct Item * new_code){
 		}
 	}
 	end:
-	printf("stopped\n");
+	printf("\nstopped\n");
 	return 0;
 }
 
