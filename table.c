@@ -21,7 +21,7 @@ struct Table {
 struct Entry * table_get(struct Table * table, struct Value key, bool add){
 	char * key_data;
 	size_t key_size;
-	//this is very bad.
+	//this is very very very very very bad.
 	switch(key.type){
 	case tNumber:
 		key_data = (char *)&(key.number);

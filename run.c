@@ -103,6 +103,8 @@ enum Operator {
 	oJumpFalse,
 	oJumpTrue,
 	oFunctionInfo,
+	
+	oGroup_Start, //parsing only
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be a Value, with a special [type]
@@ -420,6 +422,12 @@ int main(){
 			//Input: <values ...> <# of values>
 			//Output: <array>
 			break;case oArray:;
+				//todo: v
+				//a = pop();
+				//if(a.type != tNArgs)
+				//	die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
+				//uint args = a.args;
+				
 				struct Array * array = allocate_array(item.length);
 				for(i = item.length; i>0; i--){
 					array->pointer[i-1].value = pop();
