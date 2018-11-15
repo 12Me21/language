@@ -69,7 +69,7 @@ struct Item * parse(FILE * stream){
 			token = next_token();
 		else
 			read_next=true;
-		printf("token t %d\n",token.type);
+		//printf("token t %d\n",token.type);
 	}
 	
 	bool read_token(int wanted_type){
@@ -88,8 +88,9 @@ struct Item * parse(FILE * stream){
 	struct Item * output_stack = malloc(sizeof(struct Item) * 65536);
 	uint output_stack_pointer = 0;
 	
-	void output(struct Item item){
-		output_stack[output_stack_pointer++] = item;
+	struct Item * output(struct Item item){
+		output_stack[output_stack_pointer] = item;
+		return &(output_stack[output_stack_pointer++]);
 	}
 	
 	struct Item op_stack[256];
@@ -113,7 +114,7 @@ struct Item * parse(FILE * stream){
 	}
 	
 	void flush_op_stack(enum Operator operator){
-		printf("flush op\n");
+		//printf("flush op\n");
 		while(op_stack_pointer){
 			struct Item top = pop_op();
 			if(priority[top.operator] >= priority[operator])
@@ -214,33 +215,55 @@ struct Item * parse(FILE * stream){
 		}
 	}
 	
-	bool read_line(){
-		printf("parser line\n");
+	bool read_full_expression(){
 		if(read_expression()){
-			printf("expr fin\n");
 			while(op_stack_pointer){
 				struct Item item = pop_op();
 				if(item.operator == oGroup_Start)
 					parse_error("Internal error: `(` in operator stack after parsing expression\n");
 				output(item);
 			}
-			output((struct Item){.operator = oDiscard});
 			return true;
+		}
+		return false;
+	}
+	
+	bool read_line(enum Keyword expect_end){
+		//printf("parser line\n");
+		if(read_full_expression()){
+			output((struct Item){.operator = oDiscard});
 		}else{
 			next();
-			if(token.type==tkSemicolon)
-				return true;
-			// next();
-			// switch(token.type){
-			// case
+			switch(token.type){
+			case tkSemicolon:
 				
-				
-			// }
-			return false;
+			break;case tkKeyword:
+				switch(token.keyword){
+				case kWhile:
+					printf("while\n");
+					Address start_pos = output_stack_pointer;
+					read_full_expression() || parse_error("Missing condition in WHILE\n");
+					struct Item * start = output((struct Item){.operator = oJumpFalse});
+					while(read_line(kWend));//read until WEND
+					output((struct Item){.operator = oJump, .address = start_pos});
+					start->address = output_stack_pointer;
+				break;default:
+					if(token.keyword != expect_end)
+						parse_error("expected keyword, got a different keyword\n");
+					return false;
+				}
+			break;default:
+				if(expect_end)
+					parse_error("expected keyword, got EOF\n");
+				return false;
+			}
 		}
+		return true;
 	}
-	printf("Parser started (for real)\n");
-	while(read_line());
+	
+	
+	//printf("Parser started (for real)\n");
+	while(read_line(0));
 	printf("Parser finished\n");
 	output((struct Item){.operator = oHalt});
 	output_stack[0].locals = globals;

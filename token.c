@@ -20,11 +20,27 @@ enum Token_Type {
 	tkEof,
 };
 
-int parse_error(char * message){
-	printf(message);
-	exit(1);
-	return 0;
-}
+
+
+char * token_name[] = {
+	"Value",
+	"`.`",
+	"Operator",
+	"Operator",
+	"Operator",
+	"`(`",
+	"`)`",
+	"`[`",
+	"`]`",
+	"`{`",
+	"`}`",
+	"`;`",
+	"`:`",
+	"`,`",
+	"Keyword",
+	"Word",
+	"End",
+};
 
 struct Token {
 	enum Token_Type type;
@@ -51,17 +67,32 @@ bool read_next;
 int c;
 FILE * stream;
 char string_temp[1000];
+uint line_number, real_line_number, column, real_column;
+
+int parse_error(char * message){
+	printf("Error while parsing line %d, character %d\n", real_line_number, real_column);
+	printf(message);
+	exit(1);
+	return 0;
+}
 
 void next(){
-	if(read_next)
+	if(read_next){
+		column++;
+		if(c=='\n'){
+			column = 1;
+			line_number ++;
+		}
 		c = getc(stream);
-	else
+	}else
 		read_next = true;
-	printf("char: %c\n",c);
+	//printf("char: %c\n",c);
 }
 
 void init(FILE * new_stream){
 	stream = new_stream;
+	line_number = 1;
+	column = 1;
 	read_next = true;
 	next();
 }
@@ -111,6 +142,9 @@ struct Token next_token(){
 		next();
 	}
 	
+	real_line_number = line_number;
+	real_column = column;
+	
 	switch(c){
 		case EOF:
 			return (struct Token){.type = tkEof};
@@ -136,7 +170,7 @@ struct Token next_token(){
 			if(c == '.'){
 				next();
 				if(is_digit(c)){
-					next();
+					//next();
 					double divider = 10;
 					do{
 						number += (c - '0') / divider;
@@ -169,6 +203,8 @@ struct Token next_token(){
 				string_temp[length++] = c;
 				next();
 			}
+			next(); //IDK why I need 2 nexts here
+			next();
 			return (struct Token){.type = tkValue, .value = {.type = tString, .string = ALLOC_INIT(struct String, {.pointer = memdup(string_temp, length * sizeof(char)), .length = length})}};
 		case '~':
 			next();

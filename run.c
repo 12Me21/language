@@ -1,11 +1,3 @@
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <setjmp.h>
-#include <string.h>
-#include "alloc_init.h"
-#include <math.h>
 
 jmp_buf err_ret;
 
@@ -176,7 +168,8 @@ struct Array * allocate_array(int length){
 void assign_variable(struct Variable * variable, struct Value value){
 	//printf("var assign");
 	if(!variable)
-		die("Can't set the value of whatever the heck that is\n");
+		die("Tried to set the value of something that isn't a variable\n");
+	//Can't set the value of whatever the heck that is\n");
 	struct Variable * old_var_ptr = variable;
 	variable->value = value;
 	variable->value.variable = old_var_ptr;
@@ -340,12 +333,11 @@ int run(struct Item * new_code){
 	printf("Starting \n\n");
 	
 	if(setjmp(err_ret)){
-		printf("Error\n");
-		//printf("Error on line %d, column %d\n", item.line, item.column);
+		printf("\aError\n");
+		//printf("Error on line %d, char %d\n", item.line, item.column);
 		return 1;
 	}else{
 		while(1){
-			
 			item = code[pos++];
 			//printf("working on item: %d, op %d\n",pos,item.operator);
 			switch(item.operator){
