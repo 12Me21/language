@@ -23,3 +23,10 @@ void divisible_by(uint args){
 		die("Type mismatch in divby\n");
 	}
 }
+
+void millisec(uint args){
+	if(args!=0)
+		die("wrong # of args\n");
+	pop();
+	push((struct Value){.type = tNumber, .number = (double)(current_timestamp()-start_time)});
+}

@@ -20,7 +20,10 @@ enum Token_Type {
 	tkEof,
 };
 
-
+struct Line {
+	uint line;
+	uint column;
+};
 
 char * token_name[] = {
 	"Value",
@@ -67,21 +70,29 @@ bool read_next;
 int c;
 FILE * stream;
 char string_temp[1000];
-uint line_number, real_line_number, column, real_column;
+struct Line line;
+struct Line real_line;
 
-int parse_error(char * message){
-	printf("Error while parsing line %d, character %d\n", real_line_number, real_column);
-	printf(message);
-	exit(1);
-	return 0;
+void parse_error_1(){
+	printf("Error while parsing line %d, character %d\n ", real_line.line, real_line.column);
+}
+
+void parse_error_2(){
+	longjmp(err_ret, 0);
+}
+
+#define parse_error(...) (parse_error_1(), printf(__VA_ARGS__), parse_error_2())
+
+void unexpected_end(char * got, char * expected, char * start, struct Line start_line){
+	parse_error("Encountered `%s` while expecting `%s` (to end `%s` on line %d char %d)\n", got, expected, start, start_line.line, start_line.column);
 }
 
 void next(){
 	if(read_next){
-		column++;
+		line.column++;
 		if(c=='\n'){
-			column = 1;
-			line_number ++;
+			line.column = 1;
+			line.line++;
 		}
 		c = getc(stream);
 	}else
@@ -91,8 +102,8 @@ void next(){
 
 void init(FILE * new_stream){
 	stream = new_stream;
-	line_number = 1;
-	column = 1;
+	line.line = 1;
+	line.column = 1;
 	read_next = true;
 	next();
 }
@@ -111,7 +122,7 @@ enum Soft_Keyword { //reference to nametable
 	kTo = 0, kStep,
 };
 
-char * name_table[63356] = {"to", "step"};
+char * name_table[63356] = {"to", "step", "millisec"};
 uint name_table_pointer = 0;
 
 char * keywords[] = {
@@ -142,8 +153,7 @@ struct Token next_token(){
 		next();
 	}
 	
-	real_line_number = line_number;
-	real_column = column;
+	real_line = line;
 	
 	switch(c){
 		case EOF:

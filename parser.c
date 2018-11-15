@@ -59,7 +59,7 @@ int priority[] = {
 };
 
 struct Item * parse(FILE * stream){
-	printf("Parser started\n");
+	//printf("Parser started\n");
 	init(stream);
 	struct Token token;
 	bool read_next=true;
@@ -154,11 +154,14 @@ struct Item * parse(FILE * stream){
 		break;case tkOperator_1: case tkOperator_12:
 			flush_op_stack(token.operator_1);
 			push_op((struct Item){.operator = token.operator_1});
-			read_expression() || parse_error("Expected expression\n");
+			if(!read_expression())
+				parse_error("Expected expression\n");
 		break;case tkLeft_Paren:
 			push_op(group_start);
-			read_expression() || parse_error("Expected expression\n");
-			read_token(tkRight_Paren) || parse_error("Expected `)`\n");
+			if(!read_expression())
+				parse_error("Expected expression\n");
+			if(!read_token(tkRight_Paren))
+				parse_error("Expected `)`\n");
 			flush_group();
 		//array literal
 		break;case tkLeft_Bracket:
@@ -167,11 +170,13 @@ struct Item * parse(FILE * stream){
 			if(read_expression()){
 				length++;
 				while(read_token(tkComma)){
-					read_expression() || parse_error("Expected expression\n");
+					if(!read_expression())
+						parse_error("Expected expression after comma\n");
 					length++;
 				}
 			}
-			read_token(tkRight_Bracket) || parse_error("Expected `]`\n");
+			if(!read_token(tkRight_Bracket))
+				parse_error("Expected `]`\n");
 			flush_group();
 			output((struct Item){.operator = oArray, .length = length});
 		break;default:
@@ -184,15 +189,18 @@ struct Item * parse(FILE * stream){
 			//array/table index
 			case tkLeft_Bracket:
 				push_op(group_start);
-				read_expression() || parse_error("Expected expression\n");
-				read_token(tkRight_Bracket) || parse_error("Expected `]`\n");
+				if(!read_expression())
+					parse_error("Expected expression\n");
+				if(!read_token(tkRight_Bracket))
+					parse_error("Expected `]`\n");
 				flush_group();
 				output((struct Item){.operator = oIndex});
 			//infix operator
 			break;case tkOperator_2: case tkOperator_12:
 				flush_op_stack(token.operator_2);
 				push_op((struct Item){.operator = token.operator_2});
-				read_expression() || parse_error("Expected expression\n");
+				if(!read_expression())
+					parse_error("Expected expression\n");
 			//function call
 			break;case tkLeft_Paren:
 				push_op(group_start);
@@ -200,11 +208,13 @@ struct Item * parse(FILE * stream){
 				if(read_expression()){
 					length++;
 					while(read_token(tkComma)){
-						read_expression() || parse_error("Expected expression\n");
+						if(!read_expression())
+							parse_error("Expected expression\n");
 						length++;
 					}
 				}
-				read_token(tkRight_Paren) || parse_error("Expected `)`\n");
+				if(!read_token(tkRight_Paren))
+					parse_error("Expected `)`\n");
 				flush_group();
 				output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = length}});
 				output((struct Item){.operator = oCall});
@@ -228,7 +238,7 @@ struct Item * parse(FILE * stream){
 		return false;
 	}
 	
-	bool read_line(enum Keyword expect_end){
+	enum Keyword read_line(){
 		//printf("parser line\n");
 		if(read_full_expression()){
 			output((struct Item){.operator = oDiscard});
@@ -239,32 +249,70 @@ struct Item * parse(FILE * stream){
 				
 			break;case tkKeyword:
 				switch(token.keyword){
-				case kWhile:
-					printf("while\n");
+				//WHILE
+				case kWhile:;
 					Address start_pos = output_stack_pointer;
-					read_full_expression() || parse_error("Missing condition in WHILE\n");
+					struct Line start_line = real_line;
+					if(!read_full_expression())
+						parse_error("Missing condition in WHILE\n");
 					struct Item * start = output((struct Item){.operator = oJumpFalse});
-					while(read_line(kWend));//read until WEND
+					enum Keyword keyword;
+					do{
+						keyword = read_line();
+					}while(!keyword);
+					if(keyword!=kWend)
+						unexpected_end(keywords[keyword], keywords[kWend], keywords[kWhile], start_line);
 					output((struct Item){.operator = oJump, .address = start_pos});
 					start->address = output_stack_pointer;
+				
+				break;case kIf:
+					start_pos = output_stack_pointer;
+					start_line = real_line;
+					//read condition
+					if(!read_full_expression())
+						parse_error("Missing condition in WHILE\n");
+					
+					start = output((struct Item){.operator = oJumpFalse});
+					//read THEN
+					next();
+					if(token.type == tkKeyword && token.keyword == kThen)
+						parse_error("Missing `then` after `if`\n");
+					//Read code inside IF block
+					do{
+						keyword = read_line();
+					}while(!keyword);
+					
+					if(keyword == kEndif){
+						start->address = output_stack_pointer;
+					}else if(keyword == kElseif){
+						parse_error("UNSUPPORTED\n");
+					}else if(keyword == kElse){
+						parse_error("UNSUPPORTED\n");
+					}else{
+						unexpected_end(keywords[keyword], "Endif/`Elseif`/`Else", keywords[kIf], start_line);
+					}
+				break;case kEndif:case kWend:case kElse:case kElseif:
+					//"End" tokens
+					return token.keyword;
+					//if(token.keyword != expect_end)
+					//	parse_error("expected keyword, got a different keyword\n");
+					//return false;
 				break;default:
-					if(token.keyword != expect_end)
-						parse_error("expected keyword, got a different keyword\n");
-					return false;
+					parse_error("Unsupported token\n");
 				}
 			break;default:
-				if(expect_end)
-					parse_error("expected keyword, got EOF\n");
-				return false;
+				//if(expect_end)
+				//	parse_error("expected keyword, got EOF\n");
+				return -1;
 			}
 		}
-		return true;
+		return 0;
 	}
 	
 	
 	//printf("Parser started (for real)\n");
-	while(read_line(0));
-	printf("Parser finished\n");
+	while(read_line()!=-1);
+	//printf("Parser finished\n");
 	output((struct Item){.operator = oHalt});
 	output_stack[0].locals = globals;
 	return output_stack;

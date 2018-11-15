@@ -296,6 +296,16 @@ bool equal(struct Value a, struct Value b){
 	return false;
 }
 
+uint64_t current_timestamp(){
+	struct timeval te; 
+	gettimeofday(&te, NULL); // get current time
+	uint64_t milliseconds = te.tv_sec*1000LL + te.tv_usec/1000; // calculate milliseconds
+	// printf("milliseconds: %lld\n", milliseconds);
+	return milliseconds;
+}
+
+uint64_t start_time;
+
 void basic_print(struct Value value){
 	switch(value.type){
 	case tNumber:
@@ -326,200 +336,197 @@ void basic_print(struct Value value){
 #include "builtins.c"
 
 int run(struct Item * new_code){
+	start_time = current_timestamp();
+	
 	code = new_code;
 	pos = 0;
 	//todo: reset other things
 	uint i = 0;
 	printf("Starting \n\n");
 	
-	if(setjmp(err_ret)){
-		printf("\aError\n");
-		//printf("Error on line %d, char %d\n", item.line, item.column);
-		return 1;
-	}else{
-		while(1){
-			item = code[pos++];
-			//printf("working on item: %d, op %d\n",pos,item.operator);
-			switch(item.operator){
-			//Constant
-			//Output: <value>
-			case oConstant:
-				push(item.value);
-			//Variable
-			//Output: <value>
-			break;case oVariable:
-				//printf("variable %d %d",item.scope, item.index);
-				if(item.scope) //local var
-					push(scope_stack[scope_stack_pointer-item.scope][item.index].value);
-				else //global var
-					push(scope_stack[0][item.index].value);
-			#include "operator.c"
-			//Assignment
-			//Input: <variable> <value>
-			break;case oAssign:;
-				struct Value value = pop();
-				struct Value variable = pop();
-				assign_variable(variable.variable, value);
-				push(value);
-			//Print
-			//Input: <args ...> <# of args>
-			break;case oPrint:;
-				for(i = item.length; i>0; i--){
-					a = stack_get(i);
-					basic_print(a);
-					if(i!=1)
-						printf("\t");
-				}
-				stack_discard(item.length);
-				printf("\n");
-			//End of program
-			break;case oHalt:
-				goto end;
-			//Table literal
-			//Input: (<key> <value> ...) <# of values>
-			//Output: <table>
-			break;case oTable:;
-				struct Table * table = ALLOC_INIT(struct Table, {.first=NULL, .last=NULL});
-				for(i = 0; i<item.length; i++){
-					a = pop();
-					b = pop();
-					table_declare(table, b, ALLOC_INIT(struct Variable, {.value = a}));
-				}
-				push((struct Value){.type = tTable, .table = table});
-			// Array literal
-			//Input: <values ...> <# of values>
-			//Output: <array>
-			break;case oArray:;
-				//todo: v
-				//a = pop();
-				//if(a.type != tNArgs)
-				//	die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
-				//uint args = a.args;
-				
-				struct Array * array = allocate_array(item.length);
-				for(i = item.length; i>0; i--){
-					array->pointer[i-1].value = pop();
-				}
-				push((struct Value){.type = tArray, .array = array});
-			// Array/Table access
-			//Input: <table> <index>
-			//Output: <value>
-			break;case oIndex:; //table, key
-				b = pop(); //key
-				a = pop(); //table
-				switch(a.type){
-				case tTable:
-					push(table_lookup(a.table, b));
-					break;
-				case tArray:
-					if(b.type!=tNumber)
-						die("Expected number for array index, got %s.\n", type_name[a.type]);
-					if(b.number<0 || b.number >= a.array->length)
-						die("Array index out of bounds (Got %g, Expected 0 to %d)\n", b.number, a.array->length-1);
-					push(a.array->pointer[(uint32_t)b.number].value);
-					break;
-				default:
-					die("Expected Array or Table; got %s.\n", type_name[a.type]);
-					// etoyr viyr rttpt zrddshrd !
-				}
-			//Call function.
-			//Input: <function> <args> <# of args>
-			//Output (builtin): <return value>
-			//Output (user): 
-			//Output (user, after return): <return value>
-			break;case oCall:
-				a = pop();
-				if(a.type != tNArgs)
-					die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
-				uint args = a.args;
-				
-				a = stack_get(args+1); //get "function" value
-				if(a.type != tFunction)
-					die("Tried to call a %s as a function\n", type_name[a.type]);
-				if(a.builtin)
-					//c functions should pop the inputs + 1 extra item from the stack.
-					//and push the return value.
-					(*(a.c_function))(args);
-				else
-					call_user_function(a.user_function, args);
-			//Discard value from stack
-			//Input: <values ...>
-			break;case oDiscard: //used after calling functions where the return value is not used.
-				pop();
-			//Create variable scope
-			break;case oScope:
-				push_scope(item.locals);
-			//Return from function
-			break;case oReturn:
-				//garbage collect here
-				pop_scope();
-				ret();
-			//Jump
-			break;case oJump:
-				pos = item.address;
-			//Jump if true
-			//Input: <condition>
-			break;case oJumpTrue:
-				if(truthy(pop()))
-					pos = item.address;
-			//Jump if false
-			//Input: <condition>
-			break;case oJumpFalse:
-				if(!truthy(pop()))
-					pos = item.address;
-			//Assign values of function input vars
-			//Input: <function> <args ...> <# of args>
-			break;case oMultiAssign:;
-				struct Variable * scope = scope_stack[scope_stack_pointer-1];
-				args = pop().args; // number of inputs which were passed to the function
-				if(args<=item.length) //right number of arguments, or fewer
-					for(i=0;i<args;i++)
-						assign_variable(scope+i, pop());
-				else //too many args
-					die("That's too many!\n");
-				pop(); //remove function from stack
-			//Logical OR operator (with shortcutting)
-			//Input: <condition 1>
-			//Output: ?<condition 1>
-			break;case oLogicalOr:
-				if(truthy(stack_get(1)))
-					pos = item.address;
-				else
-					stack_discard(1);
-			//Logical AND operator (with shortcutting)
-			//Input: <condition 1>
-			//Output: ?<condition 1>
-			break;case oLogicalAnd:
-				if(truthy(stack_get(1)))
-					stack_discard(1);
-				else
-					pos = item.address;
-			//Length operator
-			//Input: <value>
-			//Output: <length>
-			break;case oLength:
-				a = pop();
-				unsigned int length;
-				switch(a.type){
-					case tArray:
-						length = a.array->length;
-					break;
-					case tString:
-						length = a.string->length;
-					break;
-					case tTable:
-						length = table_length(a.table);
-					break;
-					default:
-						die("Length operator expected String, Array, or Table; got %s.\n", type_name[a.type]);
-				}
-				push((struct Value){.type = tNumber, .number = (double)length});
-			//this should never run
-			break;case oFunctionInfo:
-				die("Internal error: Illegal function entry\n");
-			break;default:
-				die("Unsupported operator\n");
+	while(1){
+		item = code[pos++];
+		//printf("working on item: %d, op %d\n",pos,item.operator);
+		switch(item.operator){
+		//Constant
+		//Output: <value>
+		case oConstant:
+			push(item.value);
+		//Variable
+		//Output: <value>
+		break;case oVariable:
+			//printf("variable %d %d",item.scope, item.index);
+			if(item.scope) //local var
+				push(scope_stack[scope_stack_pointer-item.scope][item.index].value);
+			else //global var
+				push(scope_stack[0][item.index].value);
+		#include "operator.c"
+		//Assignment
+		//Input: <variable> <value>
+		break;case oAssign:;
+			struct Value value = pop();
+			struct Value variable = pop();
+			assign_variable(variable.variable, value);
+			push(value);
+		//Print
+		//Input: <args ...> <# of args>
+		break;case oPrint:;
+			for(i = item.length; i>0; i--){
+				a = stack_get(i);
+				basic_print(a);
+				if(i!=1)
+					printf("\t");
 			}
+			stack_discard(item.length);
+			printf("\n");
+		//End of program
+		break;case oHalt:
+			goto end;
+		//Table literal
+		//Input: (<key> <value> ...) <# of values>
+		//Output: <table>
+		break;case oTable:;
+			struct Table * table = ALLOC_INIT(struct Table, {.first=NULL, .last=NULL});
+			for(i = 0; i<item.length; i++){
+				a = pop();
+				b = pop();
+				table_declare(table, b, ALLOC_INIT(struct Variable, {.value = a}));
+			}
+			push((struct Value){.type = tTable, .table = table});
+		// Array literal
+		//Input: <values ...> <# of values>
+		//Output: <array>
+		break;case oArray:;
+			//todo: v
+			//a = pop();
+			//if(a.type != tNArgs)
+			//	die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
+			//uint args = a.args;
+			
+			struct Array * array = allocate_array(item.length);
+			for(i = item.length; i>0; i--){
+				array->pointer[i-1].value = pop();
+			}
+			push((struct Value){.type = tArray, .array = array});
+		// Array/Table access
+		//Input: <table> <index>
+		//Output: <value>
+		break;case oIndex:; //table, key
+			b = pop(); //key
+			a = pop(); //table
+			switch(a.type){
+			case tTable:
+				push(table_lookup(a.table, b));
+				break;
+			case tArray:
+				if(b.type!=tNumber)
+					die("Expected number for array index, got %s.\n", type_name[a.type]);
+				if(b.number<0 || b.number >= a.array->length)
+					die("Array index out of bounds (Got %g, Expected 0 to %d)\n", b.number, a.array->length-1);
+				push(a.array->pointer[(uint32_t)b.number].value);
+				break;
+			default:
+				die("Expected Array or Table; got %s.\n", type_name[a.type]);
+				// etoyr viyr rttpt zrddshrd !
+			}
+		//Call function.
+		//Input: <function> <args> <# of args>
+		//Output (builtin): <return value>
+		//Output (user): 
+		//Output (user, after return): <return value>
+		break;case oCall:
+			a = pop();
+			if(a.type != tNArgs)
+				die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
+			uint args = a.args;
+			
+			a = stack_get(args+1); //get "function" value
+			if(a.type != tFunction)
+				die("Tried to call a %s as a function\n", type_name[a.type]);
+			if(a.builtin)
+				//c functions should pop the inputs + 1 extra item from the stack.
+				//and push the return value.
+				(*(a.c_function))(args);
+			else
+				call_user_function(a.user_function, args);
+		//Discard value from stack
+		//Input: <values ...>
+		break;case oDiscard: //used after calling functions where the return value is not used.
+			pop();
+		//Create variable scope
+		break;case oScope:
+			push_scope(item.locals);
+			assign_variable(scope_stack[scope_stack_pointer-1]+1, (struct Value){.type = tFunction, .builtin = true, .c_function = &millisec});
+		//Return from function
+		break;case oReturn:
+			//garbage collect here
+			pop_scope();
+			ret();
+		//Jump
+		break;case oJump:
+			pos = item.address;
+		//Jump if true
+		//Input: <condition>
+		break;case oJumpTrue:
+			if(truthy(pop()))
+				pos = item.address;
+		//Jump if false
+		//Input: <condition>
+		break;case oJumpFalse:
+			if(!truthy(pop()))
+				pos = item.address;
+		//Assign values of function input vars
+		//Input: <function> <args ...> <# of args>
+		break;case oMultiAssign:; //never used
+			struct Variable * scope = scope_stack[scope_stack_pointer-1];
+			args = pop().args; // number of inputs which were passed to the function
+			if(args<=item.length) //right number of arguments, or fewer
+				for(i=0;i<args;i++)
+					assign_variable(scope+i, pop());
+			else //too many args
+				die("That's too many!\n");
+			pop(); //remove function from stack
+		//Logical OR operator (with shortcutting)
+		//Input: <condition 1>
+		//Output: ?<condition 1>
+		break;case oLogicalOr:
+			if(truthy(stack_get(1)))
+				pos = item.address;
+			else
+				stack_discard(1);
+		//Logical AND operator (with shortcutting)
+		//Input: <condition 1>
+		//Output: ?<condition 1>
+		break;case oLogicalAnd:
+			if(truthy(stack_get(1)))
+				stack_discard(1);
+			else
+				pos = item.address;
+		//Length operator
+		//Input: <value>
+		//Output: <length>
+		break;case oLength:
+			a = pop();
+			unsigned int length;
+			switch(a.type){
+				case tArray:
+					length = a.array->length;
+				break;
+				case tString:
+					length = a.string->length;
+				break;
+				case tTable:
+					length = table_length(a.table);
+				break;
+				default:
+					die("Length operator expected String, Array, or Table; got %s.\n", type_name[a.type]);
+			}
+			push((struct Value){.type = tNumber, .number = (double)length});
+		//this should never run
+		break;case oFunctionInfo:
+			die("Internal error: Illegal function entry\n");
+		break;default:
+			die("Unsupported operator\n");
 		}
 	}
 	end:
