@@ -1,5 +1,3 @@
-#define ARRAYSIZE(x) (sizeof(x) / sizeof((x)[0]))
-
 enum Token_Type {
 	tkValue,
 	tkDot,

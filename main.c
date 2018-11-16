@@ -22,7 +22,6 @@ int main(int argc, char * argv[]){
 		printf("Wrong number of arguments. Try again.\n"); //evil
 		return 1;
 	}
-	
 	if(setjmp(err_ret)){
 		//printf("\aError\n");
 		return 1;

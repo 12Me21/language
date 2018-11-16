@@ -3,3 +3,5 @@ void * memdup(void * source, size_t size) {
 	return mem ? memcpy(mem, source, size) : NULL;
 }
 #define ALLOC_INIT(type, ...) memdup((type[]){ __VA_ARGS__ }, sizeof(type))
+
+#define ARRAYSIZE(a) (sizeof(a)/sizeof(a[0]))

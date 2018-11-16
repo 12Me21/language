@@ -110,14 +110,15 @@ enum Operator {
 	oScope,
 	
 	oReturn,
-	oMultiAssign,
 	oJump,
 	oLogicalOr,
 	oLogicalAnd,
 	oLength,
 	oJumpFalse,
 	oJumpTrue,
-	oFunctionInfo,
+	oFunction_Info,
+	
+	oReturn_None,
 	
 	oGroup_Start, //parsing only
 };
@@ -128,15 +129,18 @@ struct Item {
 	union {
 		struct Value value;
 		Address address; //index in bytecode
-		struct { //variable
-			uint scope;
-			uint index;
-		};
-		uint length; //generic length
+		 //used by variable and functioninfo
 		struct {
-			uint locals; //# of local variables in a scope
-			uint inputs; //# of inputs to a function
-		};
+			uint level; //level of var or func
+			union {
+				uint index; //index of var
+				struct {
+					uint locals; //# of local variables in a scope
+					uint args; //# of inputs to a function
+				};
+			};
+		}; //simplify this ^
+		uint length; //generic length
 	};
 	//uint line;
 	//uint column;
@@ -154,12 +158,9 @@ struct Item {
 // - stack item
 // - constraint expression
 
-#define STACK_SIZE 256
-#define SCOPE_STACK_SIZE 256
-#define CALL_STACK_SIZE 256
 //#define die longjmp(err_ret, 0)
 #define die(...) {printf(__VA_ARGS__); longjmp(err_ret, 0);}
-struct Value stack[STACK_SIZE];
+struct Value stack[256];
 uint32_t stack_pointer = 0;
 
 struct Array * allocate_array(int length){
@@ -177,17 +178,18 @@ void assign_variable(struct Variable * variable, struct Value value){
 }
 
 struct Item * code;
-Address call_stack[256];
-uint32_t call_stack_pointer = 0;
-struct Variable * scope_stack[256];
-unsigned int scope_stack_pointer = 0;
+Address call_stack[256]; //this should be bigger
+uint call_stack_pointer = 0;
+struct Variable * scope_stack[256]; //this doesn't need to be bigger
+uint scope_stack_pointer = 0;
+struct Variable * level_stack[256];
 
 Address pos = 0;
 struct Item item;
 
 //Main stack functions
 void push(struct Value value){
-	if(stack_pointer >= STACK_SIZE)
+	if(stack_pointer >= ARRAYSIZE(stack))
 		die("Stack Overflow\n");
 	stack[stack_pointer++] = value;
 }
@@ -213,7 +215,7 @@ void make_variable(struct Variable * variable){
 	variable->value.variable = variable;
 }
 struct Variable * push_scope(int locals){
-	if(scope_stack_pointer >= SCOPE_STACK_SIZE)
+	if(scope_stack_pointer >= ARRAYSIZE(scope_stack))
 		die("Scope Stack Overflow\n");
 	struct Variable * scope = scope_stack[scope_stack_pointer++] = malloc(sizeof(struct Variable) * locals);
 	int i;
@@ -224,22 +226,28 @@ struct Variable * push_scope(int locals){
 void pop_scope(){
 	if(scope_stack_pointer <= 0)
 		die("Internal Error: Scope Stack Underflow\n");
+	//garbage collect here
 	free(scope_stack[--scope_stack_pointer]);
 }
+//Call a user defined function
+//stack in: | <function (unused)> <args> |
+//stack out: | |
+//modifies level_stack, pushed to call_stack and scope_stack, jumps to address.
 void call_user_function(Address address, uint inputs){
-	if(call_stack_pointer >= CALL_STACK_SIZE)
+	if(call_stack_pointer >= ARRAYSIZE(call_stack))
 		die("Call Stack Overflow\n");
 	call_stack[call_stack_pointer++] = pos;
 	//check function info
-	if(code[address].operator != oFunctionInfo)
+	if(code[address].operator != oFunction_Info)
 		die("Internal error: Could not call function because function info is missing\n");
 	//create scope
 	struct Variable * scope = push_scope(code[address].locals);
+	level_stack[code[address].level] = scope;
 	//assign values to input variables
 	uint i;
-	if(inputs <= code[address].inputs) //right number of arguments, or fewer
+	if(inputs <= code[address].args) //right number of arguments, or fewer
 		for(i=0;i<inputs;i++)
-			assign_variable(scope+i, pop());
+			assign_variable(&scope[i], pop());
 	else //too many args
 		die("That's too many!\n");
 	//jump
@@ -247,6 +255,8 @@ void call_user_function(Address address, uint inputs){
 	pop(); //remove function itself
 }
 void ret(){
+	pop_scope();
+	//todo: delete variable reference of returned value
 	if(call_stack_pointer <= 0)
 		die("Internal Error: Call Stack Underflow\n");
 	pos = call_stack[--call_stack_pointer]+1;
@@ -353,11 +363,8 @@ int run(struct Item * new_code){
 		//Variable
 		//Output: <value>
 		break;case oVariable:
-			//printf("variable %d %d",item.scope, item.index);
-			if(item.scope) //local var
-				push(scope_stack[scope_stack_pointer-item.scope][item.index].value);
-			else //global var
-				push(scope_stack[0][item.index].value);
+			//printf("variable. level %d index %d\n", item.level, item.index);
+			push(level_stack[item.level][item.index].value);
 		#include "operator.c"
 		//Assignment
 		//Input: <variable> <value>
@@ -453,13 +460,14 @@ int run(struct Item * new_code){
 			pop();
 		//Create variable scope
 		break;case oScope:
-			push_scope(item.locals);
-			assign_variable(scope_stack[0]+0, (struct Value){.type = tFunction, .builtin = true, .c_function = &seconds});
+			level_stack[0] = push_scope(item.locals);
+			assign_variable(level_stack[0]+1, (struct Value){.type = tFunction, .builtin = true, .c_function = &seconds});
 		//Return from function
 		break;case oReturn:
-			//garbage collect here
-			pop_scope();
 			ret();
+		break;case oReturn_None:
+			ret();
+			push((struct Value){.type = tNone});
 		//Jump
 		break;case oJump:
 			pos = item.address;
@@ -473,17 +481,6 @@ int run(struct Item * new_code){
 		break;case oJumpFalse:
 			if(!truthy(pop()))
 				pos = item.address;
-		//Assign values of function input vars
-		//Input: <function> <args ...> <# of args>
-		break;case oMultiAssign:; //never used
-			struct Variable * scope = scope_stack[scope_stack_pointer-1];
-			args = pop().args; // number of inputs which were passed to the function
-			if(args<=item.length) //right number of arguments, or fewer
-				for(i=0;i<args;i++)
-					assign_variable(scope+i, pop());
-			else //too many args
-				die("That's too many!\n");
-			pop(); //remove function from stack
 		//Logical OR operator (with shortcutting)
 		//Input: <condition 1>
 		//Output: ?<condition 1>
@@ -521,7 +518,7 @@ int run(struct Item * new_code){
 			}
 			push((struct Value){.type = tNumber, .number = (double)length});
 		//this should never run
-		break;case oFunctionInfo:
+		break;case oFunction_Info:
 			die("Internal error: Illegal function entry\n");
 		break;default:
 			die("Unsupported operator\n");
