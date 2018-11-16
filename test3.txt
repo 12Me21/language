@@ -1,10 +1,11 @@
-y=def()
-	?4
+factorial = def(x)
+	if x==1 then
+		return x
+	endif
+	return x * factorial(x-1)
 end
 
-x=def(z)
-	?z
-	y()
-end
+?factorial(5)
 
-x(43)
+?[1,2,3]==[1,2,3,4]
+?[1,2,3][2]

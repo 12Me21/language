@@ -209,7 +209,7 @@ struct Token next_token(){
 				string_temp[length++] = c;
 				next();
 			}
-			next(); //IDK why I need 2 nexts here
+			//next(); //IDK why I need 2 nexts here
 			next();
 			return (struct Token){.type = tkValue, .value = {.type = tString, .string = ALLOC_INIT(struct String, {.pointer = memdup(string_temp, length * sizeof(char)), .length = length})}};
 		case '~':

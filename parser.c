@@ -277,6 +277,7 @@ bool read_expression(){
 			output((struct Item){.operator = oIndex});
 		//infix operator
 		break;case tkOperator_2: case tkOperator_12:
+			printf("i op\n");
 			flush_op_stack(token.operator_2);
 			push_op((struct Item){.operator = token.operator_2});
 			if(!read_expression())
@@ -421,6 +422,12 @@ enum Keyword read_line(){
 				start->address = output_stack_pointer;
 				function_info->locals = locals_length[scope_length-1];
 				discard_scope();
+			break;case kReturn:
+				if(read_full_expression()){
+					output((struct Item){.operator = oReturn});
+				}else{
+					output((struct Item){.operator = oReturn_None});
+				}
 			break;case kEndif:case kWend:case kElse:case kElseif:case kUntil:case kEnd:
 				//"End" tokens
 				return token.keyword;
@@ -439,6 +446,10 @@ enum Keyword read_line(){
 	printf("line finished\n");
 	return 0;
 }
+
+// void parse_function(){
+	
+// }
 
 struct Item * parse(FILE * stream){
 	//printf("Parser started\n");

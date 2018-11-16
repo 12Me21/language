@@ -15,6 +15,13 @@ break;case oMod:
 		die("Type mismatch in %\n");
 	}
 break;case oExponent:
+	b = pop();
+	a = pop();
+	if(a.type == tNumber && b.type == tNumber){
+		push((struct Value){.type = tNumber, .number = pow(a.number, b.number)});
+	}else{
+		die("Type mismatch in ^\n");
+	}
 break;case oBitwise_And:
 break;case oMultiply:
 	b = pop();
@@ -22,10 +29,23 @@ break;case oMultiply:
 	if(a.type == tNumber && b.type == tNumber){
 		push((struct Value){.type = tNumber, .number = a.number * b.number});
 	}else{
-		die("Type mismatch in /\n");
+		die("Type mismatch in *\n");
 	}
 break;case oNegative:
+	a = pop();
+	if(a.type == tNumber){
+		push((struct Value){.type = tNumber, .number = -a.number});
+	}else{
+		die("Type mismatch in +\n");
+	}
 break;case oSubtract:
+	b = pop();
+	a = pop();
+	if(a.type == tNumber && b.type == tNumber){
+		push((struct Value){.type = tNumber, .number = a.number - b.number});
+	}else{
+		die("Type mismatch in -\n");
+	}
 break;case oAdd:;
 	b = pop();
 	a = pop();

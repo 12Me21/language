@@ -259,7 +259,7 @@ void ret(){
 	//todo: delete variable reference of returned value
 	if(call_stack_pointer <= 0)
 		die("Internal Error: Call Stack Underflow\n");
-	pos = call_stack[--call_stack_pointer]+1;
+	pos = call_stack[--call_stack_pointer];
 }
 
 //check if a Value is truthy
@@ -284,7 +284,14 @@ bool equal(struct Value a, struct Value b){
 		case tBoolean:
 			return a.boolean == b.boolean;
 		case tArray:
-			return a.array == b.array;
+			if(a.array->length!=b.array->length)
+				return false;
+			uint i;
+			for(i=0;i<a.array->length;i++)
+				if(!equal(a.array->pointer[i].value,b.array->pointer[i].value))
+					return false;
+			return true;
+			//return a.array == b.array;
 		case tTable:
 			return a.table == b.table;
 		case tString:
@@ -305,6 +312,42 @@ bool equal(struct Value a, struct Value b){
 	}
 	return false;
 }
+//compare 2 values. a>b -> -1, a==b -> 0, a<b -> 1
+//should be 0 iff a==b but I can't guarantee this...
+int compare(struct Value a, struct Value b){
+	if(a.type != b.type)
+		die("Type mismatch in comparison\n");
+	switch(a.type){
+	case tNumber:
+		if(a.number < b.number)
+			return -1;
+		if(a.number > b.number)
+			return 1;
+		return 0;
+	case tBoolean:
+		return a.boolean - b.boolean;
+	case tArray:
+		die("Tried to compare arrays\n");
+	case tTable:
+		die("Tried to compare tables\n");
+	case tString:;
+		uint len1 = a.string->length;
+		uint len2 = b.string->length;
+		if(len1<len2){
+			int x = memcmp(a.string->pointer, b.string->pointer, len1 * sizeof(char));
+			return x ? x : -1;
+		}
+		int x = memcmp(a.string->pointer, b.string->pointer, len2 * sizeof(char));
+		return x || len1 == len2 ? x : 1;
+	case tFunction:
+		die("Tried to compare functions\n");
+	case tNone:
+		return 0;
+	default:
+		die("Internal error: Type mismatch in comparison, somehow\n");
+	}
+}
+
 
 double current_timestamp(){
 	struct timeval te; 
@@ -337,6 +380,8 @@ void basic_print(struct Value value){
 		printf("]");
 	break;case tNone:
 		printf("None");
+	break;default:
+		die("can't print aaaa\n");
 	}
 }
 
@@ -461,7 +506,7 @@ int run(struct Item * new_code){
 		//Create variable scope
 		break;case oScope:
 			level_stack[0] = push_scope(item.locals);
-			assign_variable(level_stack[0]+1, (struct Value){.type = tFunction, .builtin = true, .c_function = &seconds});
+			//assign_variable(level_stack[0]+1, (struct Value){.type = tFunction, .builtin = true, .c_function = &seconds});
 		//Return from function
 		break;case oReturn:
 			ret();
