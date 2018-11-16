@@ -24,9 +24,9 @@ void divisible_by(uint args){
 	}
 }
 
-void millisec(uint args){
+void seconds(uint args){
 	if(args!=0)
 		die("wrong # of args\n");
 	pop();
-	push((struct Value){.type = tNumber, .number = (double)(current_timestamp()-start_time)});
+	push((struct Value){.type = tNumber, .number = current_timestamp()-start_time});
 }

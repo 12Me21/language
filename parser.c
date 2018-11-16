@@ -98,7 +98,7 @@ struct Item * parse(FILE * stream){
 	
 	void push_op(struct Item item){
 		if(op_stack_pointer >= ARRAYSIZE(op_stack))
-			parse_error("Stack Overflow\n");
+			parse_error("Operator Stack Overflow\n");
 		op_stack[op_stack_pointer++] = item;
 	}
 	struct Item pop_op(){
@@ -109,8 +109,44 @@ struct Item * parse(FILE * stream){
 	
 	void resurrect_op(){
 		if(op_stack_pointer >= ARRAYSIZE(op_stack))
-			parse_error("Stack Overflow\n");
+			parse_error("Operator Stack Overflow\n");
 		op_stack_pointer++;
+	}
+	
+	uint * scope_stack[256];
+	uint scope_stack_pointer_1 = 0;
+	uint scope_stack_pointer_2[256];
+	
+	void push_scope(){
+		if(scope_stack_pointer_1 >= ARRAYSIZE(scope_stack))
+			parse_error("Scope Stack Overflow\n");
+		scope_stack[scope_stack_pointer_1] = malloc(256 * sizeof(uint));
+		scope_stack_pointer_2[scope_stack_pointer_1++] = 0;
+	}
+	
+	void 
+	
+	void discard_scope(){
+		
+		
+	}
+	
+	struct Item make_var_item(uint word){
+		uint i;
+		//This will break if ssp1 is 0. Make sure the global scope is created at the beginning!
+		for(i = scope_stack_pointer_1-1; i>=0; i--){
+			uint j;
+			for(j = 0; j < scope_stack_pointer_2[i]; j++){
+				if(word == scope_stack[i][j]){
+					return (struct Item){.operator = oVariable, .scope = i, .index = j};
+					
+				}
+			}
+		}
+		
+		if(word >= globals)
+			globals = word+1;
+		
 	}
 	
 	void flush_op_stack(enum Operator operator){
@@ -124,14 +160,6 @@ struct Item * parse(FILE * stream){
 				break;
 			}
 		}
-	}
-	
-	int globals = 0; //temp
-	
-	struct Item make_var_item(int word){
-		if(word >= globals)
-			globals = word+1;
-		return (struct Item){.operator = oVariable, .scope = 0, .index = word};
 	}
 	
 	void flush_group(){
@@ -254,7 +282,7 @@ struct Item * parse(FILE * stream){
 					Address start_pos = output_stack_pointer;
 					struct Line start_line = real_line;
 					if(!read_full_expression())
-						parse_error("Missing condition in WHILE\n");
+						parse_error("Missing condition in `while`\n");
 					struct Item * start = output((struct Item){.operator = oJumpFalse});
 					enum Keyword keyword;
 					do{
@@ -270,7 +298,7 @@ struct Item * parse(FILE * stream){
 					start_line = real_line;
 					//read condition
 					if(!read_full_expression())
-						parse_error("Missing condition in WHILE\n");
+						parse_error("Missing condition in `if`\n");
 					
 					start = output((struct Item){.operator = oJumpFalse});
 					//read THEN
@@ -285,13 +313,26 @@ struct Item * parse(FILE * stream){
 					if(keyword == kEndif){
 						start->address = output_stack_pointer;
 					}else if(keyword == kElseif){
+						//you need to do lots of stuff here
 						parse_error("UNSUPPORTED\n");
 					}else if(keyword == kElse){
+						
 						parse_error("UNSUPPORTED\n");
 					}else{
 						unexpected_end(keywords[keyword], "Endif/`Elseif`/`Else", keywords[kIf], start_line);
 					}
-				break;case kEndif:case kWend:case kElse:case kElseif:
+				break;case kRepeat:
+					start_pos = output_stack_pointer;
+					start_line = real_line;
+					do{
+						keyword = read_line();
+					}while(!keyword);
+					if(keyword!=kUntil)
+						unexpected_end(keywords[keyword], keywords[kUntil], keywords[kRepeat], start_line);
+					if(!read_full_expression())
+						parse_error("Missing condition in `until`\n");
+					output((struct Item){.operator = oJumpFalse, .address = start_pos});
+				break;case kEndif:case kWend:case kElse:case kElseif:case kUntil:
 					//"End" tokens
 					return token.keyword;
 					//if(token.keyword != expect_end)

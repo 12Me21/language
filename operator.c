@@ -17,6 +17,13 @@ break;case oMod:
 break;case oExponent:
 break;case oBitwise_And:
 break;case oMultiply:
+	b = pop();
+	a = pop();
+	if(a.type == tNumber && b.type == tNumber){
+		push((struct Value){.type = tNumber, .number = a.number * b.number});
+	}else{
+		die("Type mismatch in /\n");
+	}
 break;case oNegative:
 break;case oSubtract:
 break;case oAdd:;
@@ -47,6 +54,13 @@ break;case oGreater_Or_Equal:
 break;case oRight_Shift:
 break;case oGreater:
 break;case oDivide:
+	b = pop();
+	a = pop();
+	if(a.type == tNumber && b.type == tNumber){
+		push((struct Value){.type = tNumber, .number = a.number / b.number});
+	}else{
+		die("Type mismatch in /\n");
+	}
 break;case oPrint1:
 	basic_print(pop());
 	printf("\n");

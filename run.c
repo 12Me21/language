@@ -296,15 +296,13 @@ bool equal(struct Value a, struct Value b){
 	return false;
 }
 
-uint64_t current_timestamp(){
+double current_timestamp(){
 	struct timeval te; 
-	gettimeofday(&te, NULL); // get current time
-	uint64_t milliseconds = te.tv_sec*1000LL + te.tv_usec/1000; // calculate milliseconds
-	// printf("milliseconds: %lld\n", milliseconds);
-	return milliseconds;
+	gettimeofday(&te, NULL);
+	return te.tv_sec + te.tv_usec/1000000.0;
 }
 
-uint64_t start_time;
+double start_time;
 
 void basic_print(struct Value value){
 	switch(value.type){
@@ -456,7 +454,7 @@ int run(struct Item * new_code){
 		//Create variable scope
 		break;case oScope:
 			push_scope(item.locals);
-			assign_variable(scope_stack[scope_stack_pointer-1]+1, (struct Value){.type = tFunction, .builtin = true, .c_function = &millisec});
+			assign_variable(scope_stack[0]+0, (struct Value){.type = tFunction, .builtin = true, .c_function = &seconds});
 		//Return from function
 		break;case oReturn:
 			//garbage collect here
@@ -658,6 +656,85 @@ int run(struct Item * new_code){
 //- index (position in that list)
 //The same variable might have different scope values depending on where it's used. (see prev. example))
 
+//DEF Y
+// VAR B
+// DEF X
+//  VAR A=B
+//  X
+// END
+//END
+//this might cause problems!
+//DEF Y
+// VAR B - scope=top, index=0
+// DEF X
+//  VAR A=B - scope=top-1, index=0
+//  X
+// END
+//END
+
+//so when X is called a few times it breaks. since top-1 is not Y's scope anymore.....
+//now, scope could instead be relative to global. so 0=global 1=Y 2=X whatever but
+
+//DEF Y
+// VAR B - scope=top, index=0
+// DEF X
+//  VAR A=B - scope=top-1, index=0
+// END
+// X
+// Y
+//END
+// now the scope stack might be <global> Y Y Y Y Y Y Y Y X
+//ok I'm confused what does B even MEAN here...
+//<later>
+//B is just from the same Y that X was created in.
+//how the FUCK do you keep track of this
+//supporting recursion was the biggest mistake I ever made in my ENTIRE LIFE aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+//aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+//aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+//(there were like 2000 lines of this)
+//ok to show that this is a BIG FUCKING PROBLEM:
+//DEF Z
+// VAR C
+// DEF Y
+//  VAR B - scope=top, index=0
+//  DEF X
+//   VAR A=B+C - scope=top-1, index=0
+//  END
+//  X
+//  Y
+// END
+// Y
+//END
+//scope stack is: [global Z Y Y Y Y Y Y Y Y Y Y X] can't use offset from global since
+//then C is global+1(right) but X would be global+3 (wrong)
+//ok so like
+//the scope stack must be different from call stack
+//like...
+//each namescope stores a reference to a varscope
+//varscope stack aligns with call stack
+//but namescope is based on the program structure (and thus, variable name links)
+//so like, Y's namescope will point to the most recent Y on the callstack/varscopestack
+//holy shit recursion is DISGUSTING and AWFUL
+//too bad it's not possible to find any information about how these things are implemented in other languages
+//anyway variables will be references to a namescope which then points to the proper varscope.
+//so when you're inside X, the namescope stack will be [global Z Y X] and the varscope stack / call stack will be [global Z Y Y Y Y Y Y Y Y Y Y X].
+//but you can't just do dumb retarded idiot shit like ignoring repeated entries in the call stack, luckily.
+//keeping track of the namescope stack is most likely not possible, though
+//maybe uhhh
+//each function stores its "level" (global = 0, global functions = 1, nested 1 = 2, etc.) which can be calculated during parsing
+//and when you enter that function, that level of the namescope stack is set to that function's varscope
+//remembering...
+//each level in the varscope stack is ummm.. a pointer to an array of variables
+//so the namescope stack can contain the same info.
+//thus not affecting speed of var access.
+//enter function:
+//1: create local vars, push to varscope stack.
+//2: check function level, set that level of namescope stack to point to the array of local vars
+//3: when a variable is encountered, use like, namescope_stack[var.scope][var.index] to access it.
+//when parsing:
+//keep the stack thing we're working on, and store scope in variables relative to global (not backwards). also store the stack depth at the start of functions.
+////////////////////////////////////
+
 // big scary problem:
 
 // function whatever(x)
@@ -733,3 +810,15 @@ int run(struct Item * new_code){
 		// x
 	// endif
 // )
+
+
+//X=@+1 compiles to
+//X <push to @ stack> @ 1 + =
+//= discards from @ stack
+
+//now I see why += etc are so common
+//not only are they efficient to convert to machine code
+//but x+=1 can just be compiled simply to X <dup> 1 +
+
+
+//talk about "resurrect" function

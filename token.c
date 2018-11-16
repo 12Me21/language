@@ -118,12 +118,10 @@ enum Keyword { //reference to keywords list
 	//...
 };
 
-enum Soft_Keyword { //reference to nametable
-	kTo = 0, kStep,
-};
+//typedef uint Word;
 
-char * name_table[63356] = {"to", "step", "millisec"};
-uint name_table_pointer = 0;
+char * name_table[63356] = {"seconds"};
+uint name_table_pointer = 1;
 
 char * keywords[] = {
 	"if", "then", "else", "elseif", "endif",
