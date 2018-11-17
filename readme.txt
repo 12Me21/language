@@ -1,0 +1,1 @@
+just compile main.c all the other things are #included and you don't need to link anything because I'm bad
