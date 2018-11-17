@@ -1,15 +1,3 @@
-void multiply(uint args){
-	if(args!=2)
-		die("wrong # of args\n");
-	struct Value a = pop();
-	struct Value b = pop();
-	if(a.type == tNumber && b.type == tNumber){
-		push((struct Value){.type = tNumber, .number = a.number * b.number});
-	}else{
-		die("Type mismatch in multiply\n");
-	}
-}
-
 void divisible_by(uint args){
 	if(args!=2)
 		die("wrong # of args\n");
@@ -24,9 +12,20 @@ void divisible_by(uint args){
 	}
 }
 
-void seconds(uint args){
-	if(args!=0)
-		die("wrong # of args\n");
-	pop();
-	push((struct Value){.type = tNumber, .number = current_timestamp()-start_time});
+// void seconds(uint args){
+	// if(args!=0)
+		// die("wrong # of args\n");
+	// pop();
+	// push((struct Value){.type = tNumber, .number = current_timestamp()-start_time});
+// }
+
+void print(uint args){
+	uint i;
+	for(i = args; i>0; i--){
+		basic_print(stack_get(i));
+		if(i!=1)
+			printf("\t");
+	}
+	stack_discard(args);
+	printf("\n");
 }

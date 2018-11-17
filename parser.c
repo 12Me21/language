@@ -27,7 +27,7 @@ int priority[] = {
 	9,
 	8,
 	11,
-	-1, //?
+	0, //?
 	//More operators
 	oArray,
 	oIndex,
@@ -155,11 +155,11 @@ struct Item make_var_item(uint word){
 	return declare_variable(word);
 }
 
-void flush_op_stack(enum Operator operator){
+void flush_op_stack(int pri){
 	//printf("flush op\n");
 	while(op_stack_pointer){
 		struct Item top = pop_op();
-		if(priority[top.operator] >= priority[operator])
+		if(priority[top.operator] >= pri)
 			output(top);
 		else{
 			resurrect_op();
@@ -186,7 +186,7 @@ bool read_expression(){
 	break;case tkWord:
 		output(make_var_item(token.word));
 	break;case tkOperator_1: case tkOperator_12:
-		flush_op_stack(token.operator_1);
+		flush_op_stack(priority[token.operator_1]);
 		push_op((struct Item){.operator = token.operator_1});
 		if(!read_expression())
 			parse_error("Expected expression\n");
@@ -213,6 +213,23 @@ bool read_expression(){
 			parse_error("Expected `]`\n");
 		flush_group();
 		output((struct Item){.operator = oArray, .length = length});
+	break;case tkAt:
+		output((struct Item){.operator = oAt/*meal*/});
+	break;case tkPrint:
+		output((struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = true, .c_function = &print}});
+		push_op(group_start);
+		length=0;
+		if(read_expression()){
+			length++;
+			while(read_token(tkComma)){
+				if(!read_expression())
+					parse_error("Expected expression\n");
+				length++;
+			}
+		}
+		flush_group();
+		output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = length}});
+		output((struct Item){.operator = oCall});
 	break;case tkKeyword:
 		if(token.keyword == kDef){
 			printf("p def\n");
@@ -262,7 +279,9 @@ bool read_expression(){
 	break;default:
 		return read_next = false;
 	}
-	//suffix/infix operators
+	//This handles operators that can appear at the "end" of an expression
+	//and might continue the expression.
+	//for example <expr> + <expr2> or <expr>[index]
 	while(1){
 		next_t();
 		switch(token.type){
@@ -277,8 +296,8 @@ bool read_expression(){
 			output((struct Item){.operator = oIndex});
 		//infix operator
 		break;case tkOperator_2: case tkOperator_12:
-			printf("i op\n");
-			flush_op_stack(token.operator_2);
+			//printf("i op\n");
+			flush_op_stack(priority[token.operator_2]);
 			push_op((struct Item){.operator = token.operator_2});
 			if(!read_expression())
 				parse_error("Expected expression\n");
@@ -310,6 +329,13 @@ bool read_full_expression(){
 	push_op(group_start);
 	if(read_expression()){
 		flush_group();
+		while(read_token(tkSemicolon)){
+			output((struct Item){.operator = oDiscard}); //discard is outputted after every expression except the last
+			push_op(group_start);
+			if(!read_expression())
+				parse_error("Expected expression\n");
+			flush_group();
+		}
 		return true;
 	}
 	flush_group();
@@ -344,7 +370,6 @@ enum Keyword read_line(){
 				start->address = output_stack_pointer;
 			
 			break;case kIf:
-				start_pos = output_stack_pointer;
 				start_line = real_line;
 				//read condition
 				if(!read_full_expression())
@@ -386,7 +411,6 @@ enum Keyword read_line(){
 				//function def compiles to:
 				//jump(@skip) @func functioninfo(level, locals, args) ... x return @skip
 				parse_error("coming soon\n");
-				start_pos = output_stack_pointer;
 				start = output((struct Item){.operator = oJump});
 				start_line = real_line;
 				if(!read_token(tkWord))
@@ -427,6 +451,32 @@ enum Keyword read_line(){
 					output((struct Item){.operator = oReturn});
 				}else{
 					output((struct Item){.operator = oReturn_None});
+				}
+			break;case kVar:
+				if(!read_token(tkWord))
+					parse_error("Missing name in variable declaration\n");
+				struct Item variable = declare_variable(token.word);
+				if(read_token(tkLeft_Brace)){
+					start = output((struct Item){.operator = oJump});
+					Address start_pos = output_stack_pointer;
+					if(!read_full_expression())
+						parse_error("Missing constraint expression\n");
+					output((struct Item){.operator = oConstrain_End});
+					start->address = output_stack_pointer;
+					//todo: store `start`... somewhere...
+					if(!read_token(tkRight_Brace))
+						parse_error("missing `}`");
+					output(variable);
+					output((struct Item){.operator = oConstrain, .address = start_pos});
+				}
+				next_t();
+				if(token.type == tkOperator_2 && token.operator_2 == oAssign){
+					output(variable);
+					if(!read_full_expression())
+						parse_error("Missing initialization expression\n");
+					output((struct Item){.operator = oAssign_Discard});
+				}else{
+					read_next = false;
 				}
 			break;case kEndif:case kWend:case kElse:case kElseif:case kUntil:case kEnd:
 				//"End" tokens
@@ -472,3 +522,7 @@ struct Item * parse(FILE * stream){
 	output_stack[0].locals = locals_length[0];
 	return output_stack;
 }
+
+//idea: read_full_expression reads a semicolon-separated list, and discards all but the last item.
+//so things like {?1,2,3;true} are parsed correctly!
+

@@ -16,6 +16,8 @@ enum Token_Type {
 	tkKeyword,
 	tkWord,
 	tkEof,
+	tkAt,
+	tkPrint,
 };
 
 struct Line {
@@ -132,6 +134,10 @@ char * keywords[] = {
 };
 
 struct Token process_word(char * word){
+	if(!strcmp(word, "true"))
+		return (struct Token){.type = tkValue, .value = {.type = tBoolean, .boolean = true}};
+	if(!strcmp(word, "false"))
+		return (struct Token){.type = tkValue, .value = {.type = tBoolean, .boolean = false}};
 	uint i;
 	for(i=0;i<ARRAYSIZE(keywords);i++)
 		if(!strcmp(keywords[i],word))
@@ -248,7 +254,7 @@ struct Token next_token(){
 			return (struct Token){.type = tkOperator_2, .operator_2 = oAdd};
 		case '?':
 			next();
-			return (struct Token){.type = tkOperator_1, .operator_1 = oPrint1};
+			return (struct Token){.type = tkPrint};
 		case '=':
 			next();
 			if(c=='='){
@@ -280,6 +286,9 @@ struct Token next_token(){
 		case ':':
 			next();
 			return (struct Token){.type = tkColon};
+		case '@':
+			next();
+			return (struct Token){.type = tkAt};
 		case '\'':
 			do{
 				next();
@@ -324,5 +333,5 @@ struct Token next_token(){
 				return process_word(string_temp);
 			}
 			parse_error("Invalid character");
-	}	
+	}
 }

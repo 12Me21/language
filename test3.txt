@@ -1,11 +1,3 @@
-factorial = def(x)
-	if x==1 then
-		return x
-	endif
-	return x * factorial(x-1)
-end
-
-?factorial(5)
-
-?[1,2,3]==[1,2,3,4]
-?[1,2,3][2]
+var n{?"set n",n,"->",@ ; true}
+n = 2
+n = 3

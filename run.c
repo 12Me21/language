@@ -5,13 +5,13 @@ typedef uint32_t Address; //location in the bytecode
 typedef uint32_t uint;
 
 enum Type {
+	tNone,
 	tNumber,
 	tString,
 	tTable,
 	tArray,
 	tFunction,
 	tBoolean,
-	tNone,
 	tNArgs, //there could be a "list" type perhaps. implemented as <items ...> <# of items>
 };
 
@@ -59,13 +59,15 @@ struct Variable {
 	Address constraint_expression;
 };
 
+struct Value * at_value;
+
 // every distinct operator
 // subtraction and negation are different operators
 // functions are called using the "call function" operator
 // which takes as input the function pointer and number of arguments
 // <function ptr> <args ...> <# of args> CALL
 enum Operator {
-	oInvalid,
+	oInvalid,//0
 	
 	oConstant,
 	oVariable,
@@ -78,7 +80,7 @@ enum Operator {
 	oMod,
 	oExponent,
 	oBitwise_And,
-	oMultiply,
+	oMultiply,//10
 	oNegative,
 	oSubtract,
 	oAdd,
@@ -95,7 +97,7 @@ enum Operator {
 	oDivide,
 	oPrint1,
 	//More operators
-	oArray,
+	oArray,//26
 	oIndex,
 	oCall,
 	oDiscard, //29
@@ -121,6 +123,11 @@ enum Operator {
 	oReturn_None,
 	
 	oGroup_Start, //parsing only
+	
+	oAssign_Discard,
+	oConstrain,
+	oConstrain_End,
+	oAt,
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be a Value, with a special [type]
@@ -163,9 +170,6 @@ struct Item {
 struct Value stack[256];
 uint32_t stack_pointer = 0;
 
-struct Array * allocate_array(int length){
-	return ALLOC_INIT(struct Array, {.pointer = malloc(sizeof(struct Variable) * length), .length = length});
-}
 void assign_variable(struct Variable * variable, struct Value value){
 	//printf("var assign");
 	if(!variable)
@@ -173,8 +177,8 @@ void assign_variable(struct Variable * variable, struct Value value){
 	//Can't set the value of whatever the heck that is\n");
 	struct Variable * old_var_ptr = variable;
 	variable->value = value;
-	variable->value.variable = old_var_ptr;
-	//TODO: check constraint
+	variable->value.variable = old_var_ptr; //can't I just use variable instead of oldvarptr?
+	//printf("constraint: %d\n",variable->constraint_expression);
 }
 
 struct Item * code;
@@ -195,17 +199,17 @@ void push(struct Value value){
 }
 struct Value pop(){
 	if(stack_pointer <= 0)
-		die("Internal Error: Stack Underflow\n");
+		die("Internal Error: Stack Underflow (in pop)\n");
 	return stack[--stack_pointer];
 }
 struct Value stack_get(int depth){
 	if(stack_pointer-depth < 0)
-		die("Internal Error: Stack Underflow\n");
+		die("Internal Error: Stack Underflow (in get)\n");
 	return stack[stack_pointer-depth];
 }
 void stack_discard(int amount){
 	if(stack_pointer-amount < 0)
-		die("Internal Error: Stack Underflow\n");
+		die("Internal Error: Stack Underflow (in discard)\n");
 	stack_pointer -= amount;
 }
 
@@ -214,10 +218,14 @@ void make_variable(struct Variable * variable){
 	variable->value = (struct Value){.type = tNone};
 	variable->value.variable = variable;
 }
+struct Array * allocate_array(int length){
+	return ALLOC_INIT(struct Array, {.pointer = calloc(sizeof(struct Variable), length), .length = length});
+}
+
 struct Variable * push_scope(int locals){
 	if(scope_stack_pointer >= ARRAYSIZE(scope_stack))
 		die("Scope Stack Overflow\n");
-	struct Variable * scope = scope_stack[scope_stack_pointer++] = malloc(sizeof(struct Variable) * locals);
+	struct Variable * scope = scope_stack[scope_stack_pointer++] = calloc(locals, sizeof(struct Variable)); //calloc so that constraint is 0 by default!
 	int i;
 	for(i=0;i<locals;i++)
 		make_variable(&scope[i]);
@@ -229,14 +237,20 @@ void pop_scope(){
 	//garbage collect here
 	free(scope_stack[--scope_stack_pointer]);
 }
+
+void call(Address address){
+	if(call_stack_pointer >= ARRAYSIZE(call_stack))
+		die("Call Stack Overflow\n");
+	call_stack[call_stack_pointer++] = pos;
+	pos = address;
+}
 //Call a user defined function
 //stack in: | <function (unused)> <args> |
 //stack out: | |
 //modifies level_stack, pushed to call_stack and scope_stack, jumps to address.
 void call_user_function(Address address, uint inputs){
-	if(call_stack_pointer >= ARRAYSIZE(call_stack))
-		die("Call Stack Overflow\n");
-	call_stack[call_stack_pointer++] = pos;
+	call(address);
+	pos++;
 	//check function info
 	if(code[address].operator != oFunction_Info)
 		die("Internal error: Could not call function because function info is missing\n");
@@ -251,11 +265,9 @@ void call_user_function(Address address, uint inputs){
 	else //too many args
 		die("That's too many!\n");
 	//jump
-	pos = address + 1;
 	pop(); //remove function itself
 }
 void ret(){
-	pop_scope();
 	//todo: delete variable reference of returned value
 	if(call_stack_pointer <= 0)
 		die("Internal Error: Call Stack Underflow\n");
@@ -264,7 +276,6 @@ void ret(){
 
 //check if a Value is truthy
 bool truthy(struct Value value){
-	//printf("truth check type %d\n",value.type);
 	if(value.type == tNone)
 		return false;
 	if(value.type == tBoolean)
@@ -349,11 +360,11 @@ int compare(struct Value a, struct Value b){
 }
 
 
-double current_timestamp(){
-	struct timeval te; 
-	gettimeofday(&te, NULL);
-	return te.tv_sec + te.tv_usec/1000000.0;
-}
+//double current_timestamp(){
+	//struct timeval te; 
+	//gettimeofday(&te, NULL);
+	//return te.tv_sec + te.tv_usec/1000000.0;
+//}
 
 double start_time;
 
@@ -380,6 +391,8 @@ void basic_print(struct Value value){
 		printf("]");
 	break;case tNone:
 		printf("None");
+	break;case tNArgs:
+		die("Internal error: tried to print # of args what\n");
 	break;default:
 		die("can't print aaaa\n");
 	}
@@ -389,7 +402,7 @@ void basic_print(struct Value value){
 #include "builtins.c"
 
 int run(struct Item * new_code){
-	start_time = current_timestamp();
+	//start_time = current_timestamp();
 	
 	code = new_code;
 	pos = 0;
@@ -411,13 +424,32 @@ int run(struct Item * new_code){
 			//printf("variable. level %d index %d\n", item.level, item.index);
 			push(level_stack[item.level][item.index].value);
 		#include "operator.c"
+		break;case oAt:
+			push(*at_value);
 		//Assignment
 		//Input: <variable> <value>
 		break;case oAssign:;
 			struct Value value = pop();
 			struct Value variable = pop();
+			if(variable.variable->constraint_expression){
+				//printf("CCC\n");
+				push(variable);
+				push(value); //replace with resurrect
+				at_value = stack + stack_pointer - 1;
+				call(variable.variable->constraint_expression);
+				
+				//todo: store new value somewhere accessible?
+			}else{
+				assign_variable(variable.variable, value);
+				push(value);
+			}
+		break;case oAssign_Discard:
+			value = pop();
+			variable = pop();
 			assign_variable(variable.variable, value);
-			push(value);
+		break;case oConstrain:
+			variable = pop();
+			variable.variable->constraint_expression = item.address;
 		//Print
 		//Input: <args ...> <# of args>
 		break;case oPrint:;
@@ -455,7 +487,7 @@ int run(struct Item * new_code){
 			
 			struct Array * array = allocate_array(item.length);
 			for(i = item.length; i>0; i--){
-				array->pointer[i-1].value = pop();
+				assign_variable(&(array->pointer[i-1]), pop());
 			}
 			push((struct Value){.type = tArray, .array = array});
 		// Array/Table access
@@ -479,6 +511,13 @@ int run(struct Item * new_code){
 				die("Expected Array or Table; got %s.\n", type_name[a.type]);
 				// etoyr viyr rttpt zrddshrd !
 			}
+		break;case oConstrain_End:
+			if(!truthy(pop()))
+				die("validation failed!\n");
+			ret();
+			value = pop();
+			assign_variable(pop().variable, value);
+			push(value);
 		//Call function.
 		//Input: <function> <args> <# of args>
 		//Output (builtin): <return value>
@@ -509,8 +548,11 @@ int run(struct Item * new_code){
 			//assign_variable(level_stack[0]+1, (struct Value){.type = tFunction, .builtin = true, .c_function = &seconds});
 		//Return from function
 		break;case oReturn:
+			//todo: delete variable reference of returned value
+			pop_scope();
 			ret();
 		break;case oReturn_None:
+			pop_scope();
 			ret();
 			push((struct Value){.type = tNone});
 		//Jump
