@@ -1,3 +1,22 @@
-var n{?"set n",n,"->",@ ; true}
+debug = def(name, old, new)
+	?"set",name,old,new
+	return new < 3
+end
+
+var n{debug("n",n,@)}
+
+var bbb
+
+var aaa = def()
+	bbb()
+end
+
+var bbb = def()
+	aaa()
+end
+
+?1<=2
+?1<=1
+
 n = 2
 n = 3

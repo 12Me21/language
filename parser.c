@@ -84,7 +84,6 @@ bool read_token(int wanted_type){
 struct Item group_start = {.operator = oGroup_Start}; //set priority to -2
 
 struct Item * output_stack;
-uint output_stack_pointer = 0;
 
 struct Item * output(struct Item item){
 	output_stack[output_stack_pointer] = item;
@@ -117,7 +116,7 @@ uint locals_length[256];
 
 void p_push_scope(){
 	if(scope_length >= ARRAYSIZE(p_level_stack))
-		parse_error("Scope Stack Overflow\n");
+		parse_error("Scope stack overflow. (Too many nested functions)\n");
 	p_level_stack[scope_length] = malloc(256 * sizeof(uint));
 	locals_length[scope_length++] = 0;
 }
@@ -141,7 +140,7 @@ struct Item make_var_item(uint word){
 	uint i;
 	//This will break if ssp1 is 0. Make sure the global scope is created at the beginning!
 	//search for variable in existing scopes, starting from the current one and working down towards global.
-	printf("scope length %d\n",scope_length);
+	//printf("scope length %d\n",scope_length);
 	for(i = scope_length; i>0; i--){
 		uint j;
 		for(j = 0; j < locals_length[i-1]; j++){
@@ -152,6 +151,7 @@ struct Item make_var_item(uint word){
 	}
 	//new variable that hasn't been used before:
 	//todo: throw an error here and add a special VAR statement
+	parse_error("Undefined variable: '%s' (Use `var`)\n", name_table[word]);
 	return declare_variable(word);
 }
 
@@ -232,7 +232,7 @@ bool read_expression(){
 		output((struct Item){.operator = oCall});
 	break;case tkKeyword:
 		if(token.keyword == kDef){
-			printf("p def\n");
+			//printf("p def\n");
 			//function def compiles to:
 			//jump(@skip) @func functioninfo(level, locals, args) ... x return @skip
 			struct Item * start = output((struct Item){.operator = oJump});
@@ -343,7 +343,7 @@ bool read_full_expression(){
 }
 
 enum Keyword read_line(){
-	printf("parser line\n");
+	//printf("parser line\n");
 	if(read_full_expression()){
 		output((struct Item){.operator = oDiscard});
 	}else{
@@ -493,7 +493,6 @@ enum Keyword read_line(){
 			return -1;
 		}
 	}
-	printf("line finished\n");
 	return 0;
 }
 
@@ -517,7 +516,7 @@ struct Item * parse(FILE * stream){
 	if(scope_length!=1)
 		parse_error("internal error: scope mistake\n");
 	//printf("Parser finished\n");
-	printf("%d global variables\n", locals_length[0]);
+	//printf("%d global variables\n", locals_length[0]);
 	output((struct Item){.operator = oHalt});
 	output_stack[0].locals = locals_length[0];
 	return output_stack;
@@ -526,3 +525,10 @@ struct Item * parse(FILE * stream){
 //idea: read_full_expression reads a semicolon-separated list, and discards all but the last item.
 //so things like {?1,2,3;true} are parsed correctly!
 
+//that was a bad idea
+//maybe make comma separated lists their own type
+//they basically are, I mean
+//allow them to exist outside of specific situations
+//use them in all places
+//since they are stored in the stack as <values> <nargs>
+//they shouldn't cause any problems since nargs is its own type and that'll throw errors in most places

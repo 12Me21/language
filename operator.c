@@ -59,9 +59,14 @@ break;case oEqual:
 	a = pop();
 	push(make_boolean(equal(a,b)));
 break;case oBitwise_Or:
+	die("unimplemented");
 break;case oFloor_Divide:
+	die("unimplemented");
 break;case oLess_Or_Equal:
+	b=pop();
+	push(make_boolean(compare(pop(),b)<1));
 break;case oLeft_Shift:
+	die("unimplemented");
 break;case oLess:
 	b = pop();
 	a = pop();

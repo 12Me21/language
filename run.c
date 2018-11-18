@@ -130,7 +130,7 @@ enum Operator {
 	oAt,
 };
 
-//this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be a Value, with a special [type]
+//this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be <less awful>
 struct Item {
 	enum Operator operator;
 	union {
@@ -149,24 +149,10 @@ struct Item {
 		}; //simplify this ^
 		uint length; //generic length
 	};
-	//uint line;
-	//uint column;
 };
 
-//ideally:
-// code item:
-// - operator type / value type
-// - number / string / table / function / boolean / address / variable reference
-// stack item:
-// - value type
-// - number / string / table / function / boolean
-// - variable reference
-// variable:
-// - stack item
-// - constraint expression
-
 //#define die longjmp(err_ret, 0)
-#define die(...) {printf(__VA_ARGS__); longjmp(err_ret, 0);}
+#define die(...) {printf(__VA_ARGS__); longjmp(err_ret, 2);}
 struct Value stack[256];
 uint32_t stack_pointer = 0;
 
@@ -182,11 +168,11 @@ void assign_variable(struct Variable * variable, struct Value value){
 }
 
 struct Item * code;
-Address call_stack[256]; //this should be bigger
+Address call_stack[255]; //this should be bigger
 uint call_stack_pointer = 0;
-struct Variable * scope_stack[256]; //this doesn't need to be bigger
+struct Variable * scope_stack[256];
 uint scope_stack_pointer = 0;
-struct Variable * level_stack[256];
+struct Variable * level_stack[256]; //this doesn't need to be bigger
 
 Address pos = 0;
 struct Item item;
@@ -240,7 +226,7 @@ void pop_scope(){
 
 void call(Address address){
 	if(call_stack_pointer >= ARRAYSIZE(call_stack))
-		die("Call Stack Overflow\n");
+		die("Call stack overflow. (Too many functions were called without returning)\n");
 	call_stack[call_stack_pointer++] = pos;
 	pos = address;
 }
@@ -260,7 +246,7 @@ void call_user_function(Address address, uint inputs){
 	//assign values to input variables
 	uint i;
 	if(inputs <= code[address].args) //right number of arguments, or fewer
-		for(i=0;i<inputs;i++)
+		for(i=inputs-1;i!=-1;i--)
 			assign_variable(&scope[i], pop());
 	else //too many args
 		die("That's too many!\n");
@@ -479,16 +465,9 @@ int run(struct Item * new_code){
 		//Input: <values ...> <# of values>
 		//Output: <array>
 		break;case oArray:;
-			//todo: v
-			//a = pop();
-			//if(a.type != tNArgs)
-			//	die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
-			//uint args = a.args;
-			
 			struct Array * array = allocate_array(item.length);
-			for(i = item.length; i>0; i--){
-				assign_variable(&(array->pointer[i-1]), pop());
-			}
+			for(i = item.length-1; i!=-1; i--)
+				assign_variable(&(array->pointer[i]), pop());
 			push((struct Value){.type = tArray, .array = array});
 		// Array/Table access
 		//Input: <table> <index>
@@ -511,12 +490,18 @@ int run(struct Item * new_code){
 				die("Expected Array or Table; got %s.\n", type_name[a.type]);
 				// etoyr viyr rttpt zrddshrd !
 			}
-		break;case oConstrain_End:
-			if(!truthy(pop()))
-				die("validation failed!\n");
-			ret();
+		break;case oConstrain_End:;
+			bool valid = truthy(pop());
 			value = pop();
 			assign_variable(pop().variable, value);
+			if(!valid){
+				printf("Validation failed:\n");
+				printf(" Variable: <idk>\n");
+				printf(" Value: ");
+				basic_print(value);
+				die("\n");
+			}
+			ret();
 			push(value);
 		//Call function.
 		//Input: <function> <args> <# of args>
@@ -740,85 +725,6 @@ int run(struct Item * new_code){
 //- index (position in that list)
 //The same variable might have different scope values depending on where it's used. (see prev. example))
 
-//DEF Y
-// VAR B
-// DEF X
-//  VAR A=B
-//  X
-// END
-//END
-//this might cause problems!
-//DEF Y
-// VAR B - scope=top, index=0
-// DEF X
-//  VAR A=B - scope=top-1, index=0
-//  X
-// END
-//END
-
-//so when X is called a few times it breaks. since top-1 is not Y's scope anymore.....
-//now, scope could instead be relative to global. so 0=global 1=Y 2=X whatever but
-
-//DEF Y
-// VAR B - scope=top, index=0
-// DEF X
-//  VAR A=B - scope=top-1, index=0
-// END
-// X
-// Y
-//END
-// now the scope stack might be <global> Y Y Y Y Y Y Y Y X
-//ok I'm confused what does B even MEAN here...
-//<later>
-//B is just from the same Y that X was created in.
-//how the FUCK do you keep track of this
-//supporting recursion was the biggest mistake I ever made in my ENTIRE LIFE aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-//aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-//aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-//(there were like 2000 lines of this)
-//ok to show that this is a BIG FUCKING PROBLEM:
-//DEF Z
-// VAR C
-// DEF Y
-//  VAR B - scope=top, index=0
-//  DEF X
-//   VAR A=B+C - scope=top-1, index=0
-//  END
-//  X
-//  Y
-// END
-// Y
-//END
-//scope stack is: [global Z Y Y Y Y Y Y Y Y Y Y X] can't use offset from global since
-//then C is global+1(right) but X would be global+3 (wrong)
-//ok so like
-//the scope stack must be different from call stack
-//like...
-//each namescope stores a reference to a varscope
-//varscope stack aligns with call stack
-//but namescope is based on the program structure (and thus, variable name links)
-//so like, Y's namescope will point to the most recent Y on the callstack/varscopestack
-//holy shit recursion is DISGUSTING and AWFUL
-//too bad it's not possible to find any information about how these things are implemented in other languages
-//anyway variables will be references to a namescope which then points to the proper varscope.
-//so when you're inside X, the namescope stack will be [global Z Y X] and the varscope stack / call stack will be [global Z Y Y Y Y Y Y Y Y Y Y X].
-//but you can't just do dumb retarded idiot shit like ignoring repeated entries in the call stack, luckily.
-//keeping track of the namescope stack is most likely not possible, though
-//maybe uhhh
-//each function stores its "level" (global = 0, global functions = 1, nested 1 = 2, etc.) which can be calculated during parsing
-//and when you enter that function, that level of the namescope stack is set to that function's varscope
-//remembering...
-//each level in the varscope stack is ummm.. a pointer to an array of variables
-//so the namescope stack can contain the same info.
-//thus not affecting speed of var access.
-//enter function:
-//1: create local vars, push to varscope stack.
-//2: check function level, set that level of namescope stack to point to the array of local vars
-//3: when a variable is encountered, use like, namescope_stack[var.scope][var.index] to access it.
-//when parsing:
-//keep the stack thing we're working on, and store scope in variables relative to global (not backwards). also store the stack depth at the start of functions.
-////////////////////////////////////
-
 // big scary problem:
 
 // function whatever(x)
@@ -862,7 +768,7 @@ int run(struct Item * new_code){
 //so rather than x,y,z being in all different scopes, x and y are marked as closure variables, and will be accessed from the value list stored inside the function value.
 //so x might be (scope: -1, index: 0) etc.
 //whatever() will return a value like:
-//{
+//
 //	.type = tFunction
 //	.function = 2
 //	.vars
@@ -895,7 +801,6 @@ int run(struct Item * new_code){
 	// endif
 // )
 
-
 //X=@+1 compiles to
 //X <push to @ stack> @ 1 + =
 //= discards from @ stack
@@ -903,6 +808,3 @@ int run(struct Item * new_code){
 //now I see why += etc are so common
 //not only are they efficient to convert to machine code
 //but x+=1 can just be compiled simply to X <dup> 1 +
-
-
-//talk about "resurrect" function

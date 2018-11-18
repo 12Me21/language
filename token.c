@@ -1,3 +1,5 @@
+uint output_stack_pointer = 0;
+
 enum Token_Type {
 	tkValue,
 	tkDot,
@@ -78,7 +80,7 @@ void parse_error_1(){
 }
 
 void parse_error_2(){
-	longjmp(err_ret, 0);
+	longjmp(err_ret, 1);
 }
 
 #define parse_error(...) (parse_error_1(), printf(__VA_ARGS__), parse_error_2())
@@ -87,12 +89,15 @@ void unexpected_end(char * got, char * expected, char * start, struct Line start
 	parse_error("Encountered `%s` while expecting `%s` (to end `%s` on line %d char %d)\n", got, expected, start, start_line.line, start_line.column);
 }
 
+Address line_position_in_output[65536];
+
 void next(){
 	if(read_next){
 		line.column++;
 		if(c=='\n'){
 			line.column = 1;
 			line.line++;
+			line_position_in_output[line.line] = output_stack_pointer;
 		}
 		c = getc(stream);
 	}else
@@ -159,6 +164,7 @@ struct Token next_token(){
 	
 	switch(c){
 		case EOF:
+			line_position_in_output[line.line+1] = (uint)-1;
 			return (struct Token){.type = tkEof};
 		case '0':
 		case '1':
