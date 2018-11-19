@@ -12,7 +12,7 @@ break;case oMod:
 	if(a.type == tNumber && b.type == tNumber){
 		push((struct Value){.type = tNumber, .number = fmod(a.number, b.number)});
 	}else{
-		die("Type mismatch in %\n");
+		die("Type mismatch in %%\n");
 	}
 break;case oExponent:
 	b = pop();
