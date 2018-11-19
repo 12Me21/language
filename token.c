@@ -28,7 +28,7 @@ struct Line {
 };
 
 char * token_name[] = {
-	"Value",
+	"(Value)",
 	"`.`",
 	"Operator",
 	"Operator",
@@ -43,10 +43,10 @@ char * token_name[] = {
 	"`:`",
 	"`,`",
 	"Keyword",
-	"Word",
-	"End of file",
+	"(Variable)",
+	"(End of program)",
 	"@",
-	"Line break",
+	"(Line break)",
 };
 
 struct Token {

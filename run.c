@@ -849,3 +849,8 @@ int run(struct Item * new_code){
 //print = def()
 // ?args()
 //end
+
+//convert the switch statement in run() into a function that takes the operator and stack/pointer
+//so it can be used here as well as for precomputing things during parsing
+//ensure that, for example, something like `Array.sum` is precomputed so that it doesn't need to do a table access every time.
+//also remember to actually implement tables....
