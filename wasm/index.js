@@ -36,7 +36,6 @@ for (key in Module) {
 }
 
 Module['arguments'] = [];
-
 Module['arguments'].push("-e");
 Module['arguments'].push(prompt("program:"));
 
@@ -1757,7 +1756,7 @@ var ASM_CONSTS = [];
 
 STATIC_BASE = GLOBAL_BASE;
 
-STATICTOP = STATIC_BASE + 544560;
+STATICTOP = STATIC_BASE + 545328;
 /* global initializers */  __ATINIT__.push();
 
 
@@ -1766,7 +1765,7 @@ STATICTOP = STATIC_BASE + 544560;
 
 
 
-var STATIC_BUMP = 544560;
+var STATIC_BUMP = 545328;
 Module["STATIC_BASE"] = STATIC_BASE;
 Module["STATIC_BUMP"] = STATIC_BUMP;
 
@@ -5169,9 +5168,9 @@ function nullFunc_iiii(x) { err("Invalid function pointer called with signature 
 
 function nullFunc_vi(x) { err("Invalid function pointer called with signature 'vi'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");  err("Build with ASSERTIONS=2 for more info.");abort(x) }
 
-Module['wasmTableSize'] = 48;
+Module['wasmTableSize'] = 41;
 
-Module['wasmMaxTableSize'] = 48;
+Module['wasmMaxTableSize'] = 41;
 
 function invoke_ii(index,a1) {
   var sp = stackSave();

@@ -27,7 +27,6 @@ int priority[] = {
 	9,
 	8,
 	11,
-	0, //? unused
 	//More operators
 	oArray,
 	oIndex,
@@ -36,7 +35,6 @@ int priority[] = {
 	
 	
 	-66, //? real
-	oTest,
 	oHalt,
 	oTable, //table literal.
 	//<key><value><key><value>...<oTable(# of items)>
@@ -178,6 +176,19 @@ void flush_op_stack(int pri){
 	}
 }
 
+char * token_name_2(struct Token token){
+	if(token.type == tkOperator_1)
+		return operator_name[token.operator_1];
+	if(token.type == tkOperator_2)
+		return operator_name[token.operator_2];
+	if(token.type == tkOperator_12)
+		return operator_name[token.operator_2]; //_1 and _2 should be the same here
+	if(token.type == tkKeyword)
+		return keywords[token.keyword];
+	
+	return token_name[token.type];
+}
+
 void flush_group(){
 	struct Item item;
 	while((item = pop_op()).operator != oGroup_Start)
@@ -185,6 +196,10 @@ void flush_group(){
 }
 
 enum Keyword read_line();
+
+void expected(char * expected){
+	parse_error("Expected %s, got `%s`\n", expected, token_name_2(token));
+}
 
 bool read_expression(){
 	next_t();
@@ -199,23 +214,25 @@ bool read_expression(){
 		flush_op_stack(priority[token.operator_1]+1);
 		push_op((struct Item){.operator = token.operator_1});
 		if(!read_expression())
-			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
-			//parse_error("Expected expression\n");
+			//output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
+			expected("expression");
 	break;case tkLeft_Paren:
 		push_op(group_start);
 		if(!read_expression())
 			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
 			//parse_error("Expected expression\n");
 		if(!read_token(tkRight_Paren))
-			parse_error("Expected `)`\n");
+			expected("`)`");
 		flush_group();
 	//array literal
 	break;case tkLeft_Bracket:
 		push_op(group_start);
+		read_token(tkLine_Break);
 		if(!read_expression())
 			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
+		read_token(tkLine_Break);
 		if(!read_token(tkRight_Bracket))
-			parse_error("Expected `]`\n");
+			expected("`]`");
 		flush_group();
 		output((struct Item){.operator = oArray});
 	break;case tkAt:
@@ -232,7 +249,7 @@ bool read_expression(){
 			//	parse_error("Missing name in function definition\n");
 			//declare_variable(token.word);
 			if(!read_token(tkLeft_Paren))
-				parse_error("Missing `(` in function definition\n");
+				expected("`(` in function definition");
 			//create scope
 			p_push_scope();
 			uint level = scope_length-1;
@@ -243,15 +260,15 @@ bool read_expression(){
 				args++;
 				while(read_token(tkOperator_2)){
 					if(token.operator_2!=oComma)
-						parse_error("Expected comma\n");
+						expected("`,`");
 					if(!read_token(tkWord))
-						parse_error("Expected argument\n");
+						expected("function parameter name");
 					declare_variable(token.word);
 					args++;
 				}
 			}
 			if(!read_token(tkRight_Paren))
-				parse_error("Missing `)` in function definition\n");
+				expected("`)` in function definition");
 			struct Item * function_info = output((struct Item){.operator = oFunction_Info, .level = level, .args = args});
 			//read function body
 			enum Keyword keyword;
@@ -281,9 +298,9 @@ bool read_expression(){
 		case tkLeft_Bracket:
 			push_op(group_start);
 			if(!read_expression())
-				parse_error("Expected expression\n");
+				expected("expression");
 			if(!read_token(tkRight_Bracket))
-				parse_error("Expected `]`\n");
+				expected("`]`");
 			flush_group();
 			output((struct Item){.operator = oIndex});
 		//infix operator
@@ -297,7 +314,7 @@ bool read_expression(){
 			//mainly useful for things like array literals etc.
 			//maybe also allow line breaks after [ and before ] ?
 			if(!read_expression())
-				parse_error("Expected expression\n");
+				expected("expression");
 		//function call
 		break;case tkLeft_Paren:
 			push_op(group_start);
@@ -307,7 +324,7 @@ bool read_expression(){
 				output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
 				//if there is 1 arg, oCall will see something other than tNArgs on the stack.
 			if(!read_token(tkRight_Paren))
-				parse_error("Expected `)`\n");
+				expected("`)`");
 			flush_group();
 			output((struct Item){.operator = oCall});
 		break;default:

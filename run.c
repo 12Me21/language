@@ -95,7 +95,6 @@ enum Operator {
 	oRight_Shift,
 	oGreater,
 	oDivide,
-	oPrint1,
 	//More operators
 	oArray,//26
 	oIndex,
@@ -104,7 +103,6 @@ enum Operator {
 	
 	
 	oPrint,
-	oTest,
 	oHalt,
 	oTable, //table literal.
 	//<key><value><key><value>...<oTable(# of items)>
@@ -129,6 +127,13 @@ enum Operator {
 	oConstrain_End, //47
 	oAt,
 	oComma,
+};
+
+char * operator_name[] = {
+	"Invalid Operator", "Constant", "Variable", "~", "~", "!=", "!", "%", "^", "&", "*", "-", "-", "+", "==", "=", "|",
+	"\\", "<=", "<<", "<", ">=", ">>", ">", "/", "Array Literal", "Index", "Call", "Discard", "?", "Halt",
+	"Table Literal", "Global Variables", "Return", "Jump", "or", "and", "Length", "Jump if false", "Jump if true",
+	"Function Info", "Return None", "Group Start", "Assign Discard", "Constrain", "Constrain End", "At", ",",	
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be <less awful>
@@ -165,6 +170,23 @@ void assign_variable(struct Variable * variable, struct Value value){
 	variable->value = value;
 	variable->value.variable = old_var_ptr; //can't I just use variable instead of oldvarptr?
 	//printf("constraint: %d\n",variable->constraint_expression);
+}
+
+#define type_mismatch(type1, type2, operator) "`%s %s %s` is not allowed.\n", type_name[type1], operator_name[operator], type_name[type2]
+void type_mismatch_1(struct Value arg, enum Operator operator){
+	printf("Type error:\n");
+	if(arg.type==tNArgs && arg.args==0)
+		die(" `%s <empty list>` is not allowed.\n", operator_name[operator])
+	else
+		die(" `%s %s` is not allowed.\n", operator_name[operator], type_name[arg.type])
+}
+
+void type_mismatch_2(struct Value arg, enum Operator operator){
+	printf("Type error:\n");
+	if(arg.type==tNArgs && arg.args==0)
+		die(" `%s <empty list>` is not allowed.\n", operator_name[operator])
+	else
+		die(" `%s %s` is not allowed.\n", operator_name[operator], type_name[arg.type])
 }
 
 struct Item * code;
@@ -389,7 +411,6 @@ void basic_print(struct Value value){
 	break;default:
 		die("can't print aaaa\n");
 	}
-	printf("\t");
 }
 
 #include "table.c"
@@ -823,3 +844,8 @@ int run(struct Item * new_code){
 //now I see why += etc are so common
 //not only are they efficient to convert to machine code
 //but x+=1 can just be compiled simply to X <dup> 1 +
+
+//idea: function/whatever that returns all the arguments to a function
+//print = def()
+// ?args()
+//end

@@ -19,7 +19,6 @@ enum Token_Type {
 	tkWord,
 	tkEof,
 	tkAt,
-	tkPrint,
 	tkLine_Break,
 };
 
@@ -45,7 +44,9 @@ char * token_name[] = {
 	"`,`",
 	"Keyword",
 	"Word",
-	"End",
+	"End of file",
+	"@",
+	"Line break",
 };
 
 struct Token {
@@ -116,7 +117,7 @@ void next(){
 void init(FILE * new_stream){
 	stream = new_stream;
 	line.line = 1;
-	line.column = 1;
+	line.column = 0;
 	read_next = true;
 	next();
 }
@@ -124,7 +125,7 @@ void init(FILE * new_stream){
 void init_string(char * string){
 	string_input = string;
 	line.line = 1;
-	line.column = 1;
+	line.column = 0;
 	read_next = true;
 	next();
 }

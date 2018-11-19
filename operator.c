@@ -9,51 +9,46 @@ break;case oNot:
 break;case oMod:
 	b = pop();
 	a = pop();
-	if(a.type == tNumber && b.type == tNumber){
+	if(a.type == tNumber && b.type == tNumber)
 		push((struct Value){.type = tNumber, .number = fmod(a.number, b.number)});
-	}else{
+	else
 		die("Type mismatch in %%\n");
-	}
 break;case oExponent:
 	b = pop();
 	a = pop();
-	if(a.type == tNumber && b.type == tNumber){
+	if(a.type == tNumber && b.type == tNumber)
 		push((struct Value){.type = tNumber, .number = pow(a.number, b.number)});
-	}else{
+	else
 		die("Type mismatch in ^\n");
-	}
 break;case oBitwise_And:
 break;case oMultiply:
 	b = pop();
 	a = pop();
-	if(a.type == tNumber && b.type == tNumber){
+	if(a.type == tNumber && b.type == tNumber)
 		push((struct Value){.type = tNumber, .number = a.number * b.number});
-	}else{
+	else
 		die("Type mismatch in *\n");
-	}
 break;case oNegative:
 	a = pop();
 	if(a.type == tNumber){
 		push((struct Value){.type = tNumber, .number = -a.number});
 	}else{
-		die("Type mismatch in +\n");
+		type_mismatch_1(a, oNegative);
 	}
 break;case oSubtract:
 	b = pop();
 	a = pop();
-	if(a.type == tNumber && b.type == tNumber){
+	if(a.type == tNumber && b.type == tNumber)
 		push((struct Value){.type = tNumber, .number = a.number - b.number});
-	}else{
+	else
 		die("Type mismatch in -\n");
-	}
 break;case oAdd:;
 	b = pop();
 	a = pop();
-	if(a.type == tNumber && b.type == tNumber){
+	if(a.type == tNumber && b.type == tNumber)
 		push((struct Value){.type = tNumber, .number = a.number + b.number});
-	}else{
+	else
 		die("Type mismatch in +\n");
-	}
 break;case oEqual:
 	b = pop();
 	a = pop();
@@ -70,27 +65,34 @@ break;case oLeft_Shift:
 break;case oLess:
 	b = pop();
 	a = pop();
-	if(a.type == tNumber && b.type == tNumber){
+	if(a.type == tNumber && b.type == tNumber)
 		push(make_boolean(a.number < b.number));
-	}else{
+	else
 		die("Type mismatch in <\n");
-	}
 break;case oGreater_Or_Equal:
 break;case oRight_Shift:
 break;case oGreater:
 break;case oDivide:
 	b = pop();
 	a = pop();
-	if(a.type == tNumber && b.type == tNumber){
+	if(a.type == tNumber && b.type == tNumber)
 		push((struct Value){.type = tNumber, .number = a.number / b.number});
-	}else{
-		die("Type mismatch in /\n");
-	}
+	else
+		die(type_mismatch(a.type, b.type, oDivide));
 break;case oPrint:
-	read_arglist(&basic_print);
-	//printf("print");
+	a = pop();
+	if(a.type == tNArgs){
+		uint i;
+		for(i=a.args; i>=1; i--){
+			basic_print(stack_get(i));
+			if(i!=1)
+				printf("\t");
+		}
+		stack_discard(a.args);
+	}else
+		basic_print(a);
+	printf("\n");
 	push((struct Value){.type = tNone});
-	printf("\b\n");
 break;case oComma:
 	b = pop(); //new value
 	a = pop(); //list terminator (NArgs) or first value
