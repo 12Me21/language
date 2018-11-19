@@ -17,7 +17,7 @@ int priority[] = {
 	10,
 	10,
 	7,
-	0,
+	-4, // =
 	5,
 	11,
 	8,
@@ -27,7 +27,7 @@ int priority[] = {
 	9,
 	8,
 	11,
-	0, //?
+	0, //? unused
 	//More operators
 	oArray,
 	oIndex,
@@ -35,13 +35,13 @@ int priority[] = {
 	oDiscard,
 	
 	
-	oPrint,
+	-66, //? real
 	oTest,
 	oHalt,
 	oTable, //table literal.
 	//<key><value><key><value>...<oTable(# of items)>
 	
-	oScope,
+	oInit_Global,
 	
 	oReturn,
 	oJump,
@@ -54,9 +54,13 @@ int priority[] = {
 	
 	oReturn_None,
 	
-	-2, //parsing only
+	-99, //parsing only
 	//...
-	
+	oAssign_Discard,
+	oConstrain,
+	oConstrain_End,
+	oAt,
+	-2, //comma
 };
 
 struct Token token;
@@ -86,6 +90,12 @@ struct Item group_start = {.operator = oGroup_Start}; //set priority to -2
 struct Item * output_stack;
 
 struct Item * output(struct Item item){
+	//todo:
+	//if item is operator:
+	//1: check if operator is a constant operator (one that always has the same result for the same inputs)
+	//2: check if all of the inputs are constants
+	//3: evaluate
+	//optimization!!!
 	output_stack[output_stack_pointer] = item;
 	return &(output_stack[output_stack_pointer++]);
 }
@@ -159,7 +169,7 @@ void flush_op_stack(int pri){
 	//printf("flush op\n");
 	while(op_stack_pointer){
 		struct Item top = pop_op();
-		if(priority[top.operator] >= pri)
+		if(priority[top.operator] >= pri) //might need to use >= for binary ops idk?
 			output(top);
 		else{
 			resurrect_op();
@@ -186,50 +196,30 @@ bool read_expression(){
 	break;case tkWord:
 		output(make_var_item(token.word));
 	break;case tkOperator_1: case tkOperator_12:
-		flush_op_stack(priority[token.operator_1]);
+		flush_op_stack(priority[token.operator_1]+1);
 		push_op((struct Item){.operator = token.operator_1});
 		if(!read_expression())
-			parse_error("Expected expression\n");
+			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
+			//parse_error("Expected expression\n");
 	break;case tkLeft_Paren:
 		push_op(group_start);
 		if(!read_expression())
-			parse_error("Expected expression\n");
+			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
+			//parse_error("Expected expression\n");
 		if(!read_token(tkRight_Paren))
 			parse_error("Expected `)`\n");
 		flush_group();
 	//array literal
 	break;case tkLeft_Bracket:
 		push_op(group_start);
-		int length=0;
-		if(read_expression()){
-			length++;
-			while(read_token(tkComma)){
-				if(!read_expression())
-					parse_error("Expected expression after comma\n");
-				length++;
-			}
-		}
+		if(!read_expression())
+			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
 		if(!read_token(tkRight_Bracket))
 			parse_error("Expected `]`\n");
 		flush_group();
-		output((struct Item){.operator = oArray, .length = length});
+		output((struct Item){.operator = oArray});
 	break;case tkAt:
 		output((struct Item){.operator = oAt/*meal*/});
-	break;case tkPrint:
-		output((struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = true, .c_function = &print}});
-		push_op(group_start);
-		length=0;
-		if(read_expression()){
-			length++;
-			while(read_token(tkComma)){
-				if(!read_expression())
-					parse_error("Expected expression\n");
-				length++;
-			}
-		}
-		flush_group();
-		output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = length}});
-		output((struct Item){.operator = oCall});
 	break;case tkKeyword:
 		if(token.keyword == kDef){
 			//printf("p def\n");
@@ -251,7 +241,9 @@ bool read_expression(){
 			if(read_token(tkWord)){
 				declare_variable(token.word);
 				args++;
-				while(read_token(tkComma)){
+				while(read_token(tkOperator_2)){
+					if(token.operator_2!=oComma)
+						parse_error("Expected comma\n");
 					if(!read_token(tkWord))
 						parse_error("Expected argument\n");
 					declare_variable(token.word);
@@ -299,24 +291,24 @@ bool read_expression(){
 			//printf("i op\n");
 			flush_op_stack(priority[token.operator_2]);
 			push_op((struct Item){.operator = token.operator_2});
+			read_token(tkLine_Break); //this is one case where you're allowed to have line breaks in an expression
+			//after a binary infix operator
+			//1+1 can be 1+ \n 2
+			//mainly useful for things like array literals etc.
+			//maybe also allow line breaks after [ and before ] ?
 			if(!read_expression())
 				parse_error("Expected expression\n");
 		//function call
 		break;case tkLeft_Paren:
 			push_op(group_start);
-			int length=0;
-			if(read_expression()){
-				length++;
-				while(read_token(tkComma)){
-					if(!read_expression())
-						parse_error("Expected expression\n");
-					length++;
-				}
-			}
+			//read arguments
+			if(!read_expression())
+				//handle () 0 arguments
+				output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
+				//if there is 1 arg, oCall will see something other than tNArgs on the stack.
 			if(!read_token(tkRight_Paren))
 				parse_error("Expected `)`\n");
 			flush_group();
-			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = length}});
 			output((struct Item){.operator = oCall});
 		break;default:
 			read_next = false;
@@ -349,6 +341,7 @@ enum Keyword read_line(){
 	}else{
 		next_t();
 		switch(token.type){
+		case tkLine_Break:
 		case tkSemicolon:
 			
 		break;case tkKeyword:
@@ -508,7 +501,7 @@ struct Item * parse(FILE * stream){
 	read_next=true;
 	p_push_scope();
 	
-	output((struct Item){.operator = oScope});
+	output((struct Item){.operator = oInit_Global});
 	
 	//printf("Parser started (for real)\n");
 	while(read_line()!=-1);
@@ -532,3 +525,7 @@ struct Item * parse(FILE * stream){
 //use them in all places
 //since they are stored in the stack as <values> <nargs>
 //they shouldn't cause any problems since nargs is its own type and that'll throw errors in most places
+
+//constraints:
+//current: = calls constraint function, RETURN does the assignment and validation
+//better: = does assignment and THEN calls constraint function, and RETURN will do validation and throw the error.

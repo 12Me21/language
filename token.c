@@ -20,6 +20,7 @@ enum Token_Type {
 	tkEof,
 	tkAt,
 	tkPrint,
+	tkLine_Break,
 };
 
 struct Line {
@@ -156,7 +157,7 @@ struct Token process_word(char * word){
 }
 
 struct Token next_token(){
-	while(c == ' ' || c == '\t' || c == '\n'){
+	while(c == ' ' || c == '\t'){
 		next();
 	}
 	
@@ -260,7 +261,7 @@ struct Token next_token(){
 			return (struct Token){.type = tkOperator_2, .operator_2 = oAdd};
 		case '?':
 			next();
-			return (struct Token){.type = tkPrint};
+			return (struct Token){.type = tkOperator_1, .operator_1 = oPrint};
 		case '=':
 			next();
 			if(c=='='){
@@ -289,6 +290,9 @@ struct Token next_token(){
 		case ';':
 			next();
 			return (struct Token){.type = tkSemicolon};
+		case '\n':
+			next();
+			return (struct Token){.type = tkLine_Break};
 		case ':':
 			next();
 			return (struct Token){.type = tkColon};
@@ -324,7 +328,7 @@ struct Token next_token(){
 		//case '?': ...
 		case ',':
 			next();
-			return (struct Token){.type = tkComma};
+			return (struct Token){.type = tkOperator_2, .operator_2 = oComma};
 		case '/':
 			next();
 			return (struct Token){.type = tkOperator_2, .operator_2 = oDivide};

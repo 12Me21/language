@@ -86,7 +86,20 @@ break;case oDivide:
 	}else{
 		die("Type mismatch in /\n");
 	}
-break;case oPrint1:
-	basic_print(pop());
-	printf("\n");
-	push((struct Value){.type=tNone});
+break;case oPrint:
+	read_arglist(&basic_print);
+	//printf("print");
+	push((struct Value){.type = tNone});
+	printf("\b\n");
+break;case oComma:
+	b = pop(); //new value
+	a = pop(); //list terminator (NArgs) or first value
+	if(a.type == tNArgs){
+		push(b);
+		a.args++;
+		push(a);
+	}else{
+		push(a);
+		push(b);
+		push((struct Value){.type = tNArgs, .args = 2});
+	}

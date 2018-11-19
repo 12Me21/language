@@ -1,22 +1,27 @@
-debug = def(name, old, new)
-	?"set",name,old,new
-	return new < 3
+?1,2,3
+?--1
+var test = def(a,b,c)
+	return a,b,c
 end
 
-var n{debug("n",n,@)}
+?(test(1,2,3))
+?(1)
+?
+?"test"
 
-var bbb
+var x{x!=3}
+x=4
+?"ok"
+'x=3
 
-var aaa = def()
-	bbb()
-end
+x = [(1,2,3)]
 
-var bbb = def()
-	aaa()
-end
+?x
+x = [1,2,
+3]
+?"hh"
 
-?1<=2
-?1<=1
-
-n = 2
-n = 3
+while 1
+	x = 1,2,3
+	
+wend

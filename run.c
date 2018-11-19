@@ -15,7 +15,7 @@ enum Type {
 	tNArgs, //there could be a "list" type perhaps. implemented as <items ...> <# of items>
 };
 
-char * type_name[] = { "Number", "String", "Table", "Array", "Function", "Boolean", "None" };
+char * type_name[] = { "None", "Number", "String", "Table", "Array", "Function", "Boolean", "args" };
 
 // Multiple things may point to the same String or Table
 struct String {
@@ -85,7 +85,7 @@ enum Operator {
 	oSubtract,
 	oAdd,
 	oEqual,
-	oAssign,
+	oAssign, //15
 	oBitwise_Or,
 	oFloor_Divide,
 	oLess_Or_Equal,
@@ -109,14 +109,14 @@ enum Operator {
 	oTable, //table literal.
 	//<key><value><key><value>...<oTable(# of items)>
 	
-	oScope,
+	oInit_Global,
 	
-	oReturn,
+	oReturn, //35
 	oJump,
 	oLogicalOr,
 	oLogicalAnd,
 	oLength,
-	oJumpFalse,
+	oJumpFalse,//40
 	oJumpTrue,
 	oFunction_Info,
 	
@@ -124,10 +124,11 @@ enum Operator {
 	
 	oGroup_Start, //parsing only
 	
-	oAssign_Discard,
+	oAssign_Discard, //45
 	oConstrain,
-	oConstrain_End,
+	oConstrain_End, //47
 	oAt,
+	oComma,
 };
 
 //this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be <less awful>
@@ -157,7 +158,6 @@ struct Value stack[256];
 uint32_t stack_pointer = 0;
 
 void assign_variable(struct Variable * variable, struct Value value){
-	//printf("var assign");
 	if(!variable)
 		die("Tried to set the value of something that isn't a variable\n");
 	//Can't set the value of whatever the heck that is\n");
@@ -260,6 +260,20 @@ void ret(){
 	pos = call_stack[--call_stack_pointer];
 }
 
+void read_arglist(void(* callback)(struct Value)){
+	struct Value a = pop();
+	//write a standard reusable arglist handler
+	if(a.type == tNArgs){
+		uint i;
+		for(i=a.args; i>=1; i--)
+			callback(stack_get(i));
+		stack_discard(a.args);
+	}else
+		callback(a);
+}
+
+void nothing(){};
+
 //check if a Value is truthy
 bool truthy(struct Value value){
 	if(value.type == tNone)
@@ -345,13 +359,6 @@ int compare(struct Value a, struct Value b){
 	}
 }
 
-
-//double current_timestamp(){
-	//struct timeval te; 
-	//gettimeofday(&te, NULL);
-	//return te.tv_sec + te.tv_usec/1000000.0;
-//}
-
 double start_time;
 
 void basic_print(struct Value value){
@@ -382,6 +389,7 @@ void basic_print(struct Value value){
 	break;default:
 		die("can't print aaaa\n");
 	}
+	printf("\t");
 }
 
 #include "table.c"
@@ -398,7 +406,7 @@ int run(struct Item * new_code){
 	
 	while(1){
 		item = code[pos++];
-		//printf("working on item: %d, op %d\n",pos,item.operator);
+		//printf("working on item: %d, op %d. stack height: %d\n",pos,item.operator,stack_pointer);
 		switch(item.operator){
 		//Constant
 		//Output: <value>
@@ -417,18 +425,33 @@ int run(struct Item * new_code){
 		break;case oAssign:;
 			struct Value value = pop();
 			struct Value variable = pop();
+			if(value.type==tNArgs || variable.type==tNArgs)
+				die("unsupported list operation (coming soon)\n");
+			
+			assign_variable(variable.variable, value);
+			
+			push(value);
+			
+			//todo: when parsing, if = is encountered, immediately insert a "set @" token which will, when run,
+			//will set the @ pointer to the top of the stack
+			//also @ should use a stack system (where = pops from the @ stack and "set @" pushes) but later....
+			
 			if(variable.variable->constraint_expression){
-				//printf("CCC\n");
-				push(variable);
-				push(value); //replace with resurrect
 				at_value = stack + stack_pointer - 1;
-				call(variable.variable->constraint_expression);
 				
-				//todo: store new value somewhere accessible?
-			}else{
-				assign_variable(variable.variable, value);
-				push(value);
+				call(variable.variable->constraint_expression);
+				//todo: store new value somewhere accessible? (what?)
 			}
+		break;case oConstrain_End:;
+			bool valid = truthy(pop());
+			if(!valid){
+				printf("Validation failed:\n");
+				printf(" Variable: <idk>\n");
+				printf(" Value: ");
+				basic_print(value);
+				die("\n");
+			}
+			ret();
 		break;case oAssign_Discard:
 			value = pop();
 			variable = pop();
@@ -436,17 +459,6 @@ int run(struct Item * new_code){
 		break;case oConstrain:
 			variable = pop();
 			variable.variable->constraint_expression = item.address;
-		//Print
-		//Input: <args ...> <# of args>
-		break;case oPrint:;
-			for(i = item.length; i>0; i--){
-				a = stack_get(i);
-				basic_print(a);
-				if(i!=1)
-					printf("\t");
-			}
-			stack_discard(item.length);
-			printf("\n");
 		//End of program
 		break;case oHalt:
 			goto end;
@@ -465,9 +477,17 @@ int run(struct Item * new_code){
 		//Input: <values ...> <# of values>
 		//Output: <array>
 		break;case oArray:;
-			struct Array * array = allocate_array(item.length);
-			for(i = item.length-1; i!=-1; i--)
-				assign_variable(&(array->pointer[i]), pop());
+			a = pop();
+			struct Array * array;
+			if(a.type == tNArgs){
+				//printf("making array. length=%d\n",a.args);
+				array = allocate_array(a.args);
+				for(i = a.args-1; i!=-1; i--)
+					assign_variable(&(array->pointer[i]), pop());
+			}else{
+				array = allocate_array(1);
+				assign_variable(&(array->pointer[0]), a);
+			}
 			push((struct Value){.type = tArray, .array = array});
 		// Array/Table access
 		//Input: <table> <index>
@@ -490,19 +510,6 @@ int run(struct Item * new_code){
 				die("Expected Array or Table; got %s.\n", type_name[a.type]);
 				// etoyr viyr rttpt zrddshrd !
 			}
-		break;case oConstrain_End:;
-			bool valid = truthy(pop());
-			value = pop();
-			assign_variable(pop().variable, value);
-			if(!valid){
-				printf("Validation failed:\n");
-				printf(" Variable: <idk>\n");
-				printf(" Value: ");
-				basic_print(value);
-				die("\n");
-			}
-			ret();
-			push(value);
 		//Call function.
 		//Input: <function> <args> <# of args>
 		//Output (builtin): <return value>
@@ -510,9 +517,13 @@ int run(struct Item * new_code){
 		//Output (user, after return): <return value>
 		break;case oCall:
 			a = pop();
-			if(a.type != tNArgs)
-				die("Internal error. Function call failed. AAAAAaAAAAAAAAAAAaaaaaaaaaaaaa\n");
-			uint args = a.args;
+			uint args;
+			if(a.type == tNArgs){
+				args = a.args;
+			}else{
+				args = 1;
+				push(a);//optimize
+			}
 			
 			a = stack_get(args+1); //get "function" value
 			if(a.type != tFunction)
@@ -525,10 +536,14 @@ int run(struct Item * new_code){
 				call_user_function(a.user_function, args);
 		//Discard value from stack
 		//Input: <values ...>
-		break;case oDiscard: //used after calling functions where the return value is not used.
-			pop();
-		//Create variable scope
-		break;case oScope:
+		break;case oDiscard:
+			a = pop();
+			if(a.type == tNArgs){
+				printf("discarding list\n");
+				stack_discard(a.args);
+			}
+		//Create variable scope //this is just used once at the start of the prgram
+		break;case oInit_Global:
 			level_stack[0] = push_scope(item.locals);
 			//assign_variable(level_stack[0]+1, (struct Value){.type = tFunction, .builtin = true, .c_function = &seconds});
 		//Return from function
