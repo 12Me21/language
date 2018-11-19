@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+
 #include "alloc_init.c"
 
 #include "run.c"
@@ -21,18 +22,23 @@ uint get_line(Address address){
 }
 
 int main(int argc, char * argv[]){
-	if(argc != 2){
+	FILE * input = NULL;
+	char * string_input = NULL;
+	if(argc == 2){
+		input = fopen(argv[1], "r");
+		if(!input){
+			printf("Could not load file\n");
+			return 1;
+		}
+	}else if(argc == 3){
+		string_input = argv[2];
+	}else{
 		printf("Wrong number of arguments. Try again.\n");
-		return 1;
-	}
-	FILE * input = fopen(argv[1], "r");
-	if(!input){
-		printf("Wrong number of arguments. Try again.\n"); //evil
 		return 1;
 	}
 	switch(setjmp(err_ret)){
 	case 0:;
-		struct Item * bytecode = parse(input);
+		struct Item * bytecode = parse(input, string_input);
 		run(bytecode);
 		return 0;
 	break;case 1:

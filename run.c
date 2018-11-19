@@ -15,7 +15,7 @@ enum Type {
 	tNArgs, //there could be a "list" type perhaps. implemented as <items ...> <# of items>
 };
 
-char * type_name[] = { "None", "Number", "String", "Table", "Array", "Function", "Boolean", "args" };
+char * type_name[] = { "None", "Number", "String", "Table", "Array", "Function", "Boolean", "(List)" };
 
 // Multiple things may point to the same String or Table
 struct String {

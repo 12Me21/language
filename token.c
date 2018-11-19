@@ -92,6 +92,8 @@ void unexpected_end(char * got, char * expected, char * start, struct Line start
 
 Address line_position_in_output[65536];
 
+char * string_input = NULL;
+
 void next(){
 	if(read_next){
 		line.column++;
@@ -100,7 +102,12 @@ void next(){
 			line.line++;
 			line_position_in_output[line.line] = output_stack_pointer;
 		}
-		c = getc(stream);
+		if(string_input){
+			c = *string_input++;
+			if(!c)
+				c = EOF;
+		}else
+			c = getc(stream);
 	}else
 		read_next = true;
 	//printf("char: %c\n",c);
@@ -108,6 +115,14 @@ void next(){
 
 void init(FILE * new_stream){
 	stream = new_stream;
+	line.line = 1;
+	line.column = 1;
+	read_next = true;
+	next();
+}
+
+void init_string(char * string){
+	string_input = string;
 	line.line = 1;
 	line.column = 1;
 	read_next = true;

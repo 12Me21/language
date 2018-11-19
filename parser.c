@@ -321,13 +321,13 @@ bool read_full_expression(){
 	push_op(group_start);
 	if(read_expression()){
 		flush_group();
-		while(read_token(tkSemicolon)){
-			output((struct Item){.operator = oDiscard}); //discard is outputted after every expression except the last
-			push_op(group_start);
-			if(!read_expression())
-				parse_error("Expected expression\n");
-			flush_group();
-		}
+		// while(read_token(tkSemicolon)){
+			// output((struct Item){.operator = oDiscard}); //discard is outputted after every expression except the last
+			// push_op(group_start);
+			// if(!read_expression())
+				// parse_error("Expected expression\n");
+			// flush_group();
+		// }
 		return true;
 	}
 	flush_group();
@@ -493,11 +493,14 @@ enum Keyword read_line(){
 	
 // }
 
-struct Item * parse(FILE * stream){
+struct Item * parse(FILE * stream, char * string){
 	//printf("Parser started\n");
 	output_stack = malloc(sizeof(struct Item) * 65536);
 	
-	init(stream);
+	if(stream)
+		init(stream);
+	else
+		init_string(string);
 	read_next=true;
 	p_push_scope();
 	
