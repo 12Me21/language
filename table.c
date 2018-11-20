@@ -46,8 +46,10 @@ struct Entry * table_get(struct Table * table, struct Value key, bool add){
 	
 	struct Entry * current = table->first;
 	while(current){
-		if(current->key_size == key_size && current->key_type==key.type && !memcmp(current->key, key_data, key_size))
+		if(current->key_size == key_size && current->key_type==key.type && !memcmp(current->key, key_data, key_size)){
+			//printf("found\n");
 			return current;
+		}
 		current=current->next;
 	}
 	if(add){
@@ -76,21 +78,25 @@ unsigned int table_length(struct Table * table){
 //but it is expected that table.key == table["key"] ...
 //maybe make strings also check symbols too?
 
+//creates a new table slot (or overwrites an existing one) with a variable
+//(This is the only way to modify the constraint expression)
+//Meant to be used by VAR.
+//variable must be allocated on the heap (!) (?) (what?) (no)
+struct Variable * table_declare(struct Table * table, struct Value key, struct Value value){
+	struct Entry * entry = table_get(table, key, true);
+	entry->variable = (struct Variable){.value = value};
+	return entry->variable.value.variable = &(entry->variable);
+}
+
 //returns a reference to the Variable stored at an index in a table.
 //(Its value can be read/written)
 //Used in normal situations.
 //Remember that the value contains a pointer back to the original variable :)
 struct Value table_lookup(struct Table * table, struct Value key){
+	//printf("looking up\n");
 	struct Entry * entry = table_get(table, key, false);
-	return entry ? entry->variable.value : (struct Value){.type = tNone}; //maybe should be error
-}
-
-//creates a new table slot (or overwrites an existing one) with a variable
-//(This is the only way to modify the constraint expression)
-//Meant to be used by VAR.
-//variable must be allocated on the heap (!)
-void table_declare(struct Table * table, struct Value key, struct Variable * variable){
-	struct Entry * entry = table_get(table, key, true);
-	entry->variable = *variable;
-	entry->variable.value.variable = variable;
+	if(entry)
+		return entry->variable.value;
+	//printf("making new\n");
+	return table_declare(table, key, (struct Value){.type = tNone})->value;
 }

@@ -59,8 +59,6 @@ struct Variable {
 	Address constraint_expression;
 };
 
-struct Value * at_value;
-
 // every distinct operator
 // subtraction and negation are different operators
 // functions are called using the "call function" operator
@@ -85,7 +83,6 @@ enum Operator {
 	oSubtract,
 	oAdd,
 	oEqual,
-	oAssign, //15
 	oBitwise_Or,
 	oFloor_Divide,
 	oLess_Or_Equal,
@@ -127,6 +124,7 @@ enum Operator {
 	oConstrain_End, //47
 	oAt,
 	oComma,
+	oSet_At,
 };
 
 char * operator_name[] = {
@@ -146,7 +144,10 @@ struct Item {
 		struct {
 			uint level; //level of var or func
 			union {
-				uint index; //index of var
+				struct {
+					uint index; //index of var
+					//Address constraint 'put constraint address here? but that would break table/array things
+				}
 				struct {
 					uint locals; //# of local variables in a scope
 					uint args; //# of inputs to a function
@@ -190,10 +191,13 @@ void type_mismatch_2(struct Value arg, enum Operator operator){
 }
 
 struct Item * code;
-Address call_stack[255]; //this should be bigger
+Address call_stack[255]; //this should be bigger maybe
 uint call_stack_pointer = 0;
+
 struct Variable * scope_stack[256];
+struct Value * at_stack[256];
 uint scope_stack_pointer = 0;
+
 struct Variable * level_stack[256]; //this doesn't need to be bigger
 
 Address pos = 0;
@@ -440,10 +444,12 @@ int run(struct Item * new_code){
 			push(level_stack[item.level][item.index].value);
 		#include "operator.c"
 		break;case oAt:
-			push(*at_value);
+			push(*(at_stack[scope_stack_pointer]));
+		break;case oSet_At:
+			at_stack[scope_stack_pointer] = stack + stack_pointer - 1;
 		//Assignment
 		//Input: <variable> <value>
-		break;case oAssign:;
+		break;case oAssign_Discard:;
 			struct Value value = pop();
 			struct Value variable = pop();
 			if(value.type==tNArgs || variable.type==tNArgs)
@@ -451,14 +457,11 @@ int run(struct Item * new_code){
 			
 			assign_variable(variable.variable, value);
 			
-			push(value);
-			
 			//todo: when parsing, if = is encountered, immediately insert a "set @" token which will, when run,
 			//will set the @ pointer to the top of the stack
 			//also @ should use a stack system (where = pops from the @ stack and "set @" pushes) but later....
 			
 			if(variable.variable->constraint_expression){
-				at_value = stack + stack_pointer - 1;
 				
 				call(variable.variable->constraint_expression);
 				//todo: store new value somewhere accessible? (what?)
@@ -473,10 +476,6 @@ int run(struct Item * new_code){
 				die("\n");
 			}
 			ret();
-		break;case oAssign_Discard:
-			value = pop();
-			variable = pop();
-			assign_variable(variable.variable, value);
 		break;case oConstrain:
 			variable = pop();
 			variable.variable->constraint_expression = item.address;
@@ -489,9 +488,11 @@ int run(struct Item * new_code){
 		break;case oTable:;
 			struct Table * table = ALLOC_INIT(struct Table, {.first=NULL, .last=NULL});
 			for(i = 0; i<item.length; i++){
-				a = pop();
-				b = pop();
-				table_declare(table, b, ALLOC_INIT(struct Variable, {.value = a}));
+				struct Value value = pop();
+				struct Value key = pop();
+				if(value.type==tNArgs || variable.type==tNArgs)
+					die("unsupported list operation (coming soon)\n");
+				table_declare(table, key, value);
 			}
 			push((struct Value){.type = tTable, .table = table});
 		// Array literal

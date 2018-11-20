@@ -17,7 +17,6 @@ int priority[] = {
 	10,
 	10,
 	7,
-	-4, // =
 	5,
 	11,
 	8,
@@ -196,12 +195,13 @@ void flush_group(){
 }
 
 enum Keyword read_line();
+bool read_full_expression();
 
 void expected(char * expected){
 	parse_error("Expected %s, got `%s`\n", expected, token_name_2(token));
 }
 
-bool read_expression(){
+bool read_expression(bool allow_comma){
 	next_t();
 	switch(token.type){
 	//Values
@@ -213,12 +213,12 @@ bool read_expression(){
 	break;case tkOperator_1: case tkOperator_12:
 		flush_op_stack(priority[token.operator_1]+1);
 		push_op((struct Item){.operator = token.operator_1});
-		if(!read_expression())
+		if(!read_expression(true))
 			//output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
 			expected("expression");
 	break;case tkLeft_Paren:
 		push_op(group_start);
-		if(!read_expression())
+		if(!read_expression(true))
 			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
 			//parse_error("Expected expression\n");
 		if(!read_token(tkRight_Paren))
@@ -228,13 +228,50 @@ bool read_expression(){
 	break;case tkLeft_Bracket:
 		push_op(group_start);
 		read_token(tkLine_Break);
-		if(!read_expression())
+		if(!read_expression(true))
 			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
 		read_token(tkLine_Break);
 		if(!read_token(tkRight_Bracket))
 			expected("`]`");
 		flush_group();
 		output((struct Item){.operator = oArray});
+	//table literal:
+	break;case tkLeft_Brace:
+		read_token(tkLine_Break);
+		uint length = 0;
+		push_op(group_start);
+		//push_op(group_start);
+		if(read_expression(false)){
+			length++;
+			flush_group();
+			if(!read_token(tkAssign))
+				expected("`=`");
+			push_op(group_start);
+			if(!read_expression(false))
+				expected("value");
+			flush_group();
+			while(read_token(tkOperator_2)){
+				if(token.operator_2!=oComma)
+					expected("`,`");
+				push_op(group_start);
+				read_expression(false);
+				length++;
+				flush_group();
+				if(!read_token(tkAssign))
+					expected("`=`");
+				push_op(group_start);
+				if(!read_expression(false))
+					expected("value");
+				flush_group();
+			}
+		}else{
+			flush_group();
+		}
+		printf("Read table with length: %d",length);
+		//flush_group();
+		if(!read_token(tkRight_Brace))
+			expected("`}`");
+		output((struct Item){.operator = oTable, .length = length});
 	break;case tkAt:
 		output((struct Item){.operator = oAt/*meal*/});
 	break;case tkKeyword:
@@ -297,7 +334,7 @@ bool read_expression(){
 		//array/table index
 		case tkLeft_Bracket:
 			push_op(group_start);
-			if(!read_expression())
+			if(!read_expression(true))
 				expected("expression");
 			if(!read_token(tkRight_Bracket))
 				expected("`]`");
@@ -305,6 +342,12 @@ bool read_expression(){
 			output((struct Item){.operator = oIndex});
 		//infix operator
 		break;case tkOperator_2: case tkOperator_12:
+			//don't allow commas. This is for reading table literals where commas are used to separate values.
+			//(maybe a better idea would be to use a different symbol but whatever)
+			if(!allow_comma && token.operator_2 == oComma){
+				read_next = false;
+				return true;
+			}
 			//printf("i op\n");
 			flush_op_stack(priority[token.operator_2]);
 			push_op((struct Item){.operator = token.operator_2});
@@ -313,13 +356,13 @@ bool read_expression(){
 			//1+1 can be 1+ \n 2
 			//mainly useful for things like array literals etc.
 			//maybe also allow line breaks after [ and before ] ?
-			if(!read_expression())
+			if(!read_expression(true))
 				expected("expression");
 		//function call
 		break;case tkLeft_Paren:
 			push_op(group_start);
 			//read arguments
-			if(!read_expression())
+			if(!read_expression(true))
 				//handle () 0 arguments
 				output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
 				//if there is 1 arg, oCall will see something other than tNArgs on the stack.
@@ -336,15 +379,8 @@ bool read_expression(){
 
 bool read_full_expression(){
 	push_op(group_start);
-	if(read_expression()){
+	if(read_expression(true)){
 		flush_group();
-		// while(read_token(tkSemicolon)){
-			// output((struct Item){.operator = oDiscard}); //discard is outputted after every expression except the last
-			// push_op(group_start);
-			// if(!read_expression())
-				// parse_error("Expected expression\n");
-			// flush_group();
-		// }
 		return true;
 	}
 	flush_group();
@@ -354,12 +390,16 @@ bool read_full_expression(){
 enum Keyword read_line(){
 	//printf("parser line\n");
 	if(read_full_expression()){
-		output((struct Item){.operator = oDiscard});
+		if(read_token(tkAssign)){
+			output((struct Item){.operator = oSet_At});
+			read_full_expression();
+			output((struct Item){.operator = oAssign_Discard});
+		}else
+			output((struct Item){.operator = oDiscard});
 	}else{
 		next_t();
 		switch(token.type){
-		case tkLine_Break:
-		case tkSemicolon:
+		case tkLine_Break: case tkSemicolon:
 			
 		break;case tkKeyword:
 			switch(token.keyword){
@@ -389,7 +429,8 @@ enum Keyword read_line(){
 				//read THEN
 				next_t();
 				if(!(token.type == tkKeyword && token.keyword == kThen))
-					parse_error("Missing `then` after `if`\n");
+					expected("`then`");
+					//parse_error("Missing `then` after `if`\n");
 				//Read code inside IF block
 				do{
 					keyword = read_line();
@@ -479,8 +520,7 @@ enum Keyword read_line(){
 					output(variable);
 					output((struct Item){.operator = oConstrain, .address = start_pos});
 				}
-				next_t();
-				if(token.type == tkOperator_2 && token.operator_2 == oAssign){
+				if(read_token(tkAssign)){
 					output(variable);
 					if(!read_full_expression())
 						parse_error("Missing initialization expression\n");
@@ -549,3 +589,18 @@ struct Item * parse(FILE * stream, char * string){
 //constraints:
 //current: = calls constraint function, RETURN does the assignment and validation
 //better: = does assignment and THEN calls constraint function, and RETURN will do validation and throw the error.
+
+//parsing tables:
+//1: read key expression
+//2: read : (or maybe a different separator symbol?)
+//3: read value expression (don't allow top level commas)
+//4: repeat
+//5: push table literal operator
+//(how to do constraints though?? maybe there is a more consistant way to implement them for regular variables, arrays, and tables)
+
+//make = a statement rather than an expression
+//so that if x=1 then will throw an error during parsing!
+//when = is encountered in an expression, finish that expression and then read another expression and push the assign operator
+
+//idea: var <variable_name> declares a variable.
+//have an operator that applies a constraint, and after var, go back and read <variable_name> as a line of code to run the constraint and assignment.

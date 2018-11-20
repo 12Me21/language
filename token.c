@@ -20,6 +20,7 @@ enum Token_Type {
 	tkEof,
 	tkAt,
 	tkLine_Break,
+	tkAssign,
 };
 
 struct Line {
@@ -47,6 +48,7 @@ char * token_name[] = {
 	"(End of program)",
 	"@",
 	"(Line break)",
+	"=",
 };
 
 struct Token {
@@ -284,7 +286,7 @@ struct Token next_token(){
 				next();
 				return (struct Token){.type = tkOperator_2, .operator_2 = oEqual};
 			}
-			return (struct Token){.type = tkOperator_2, .operator_2 = oAssign}; //maybe just make this an operator...
+			return (struct Token){.type = tkAssign};
 		case '[':
 			next();
 			return (struct Token){.type = tkLeft_Bracket};
