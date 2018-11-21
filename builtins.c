@@ -16,16 +16,16 @@ void divisible_by(uint args){
 }
 
 //untested
-void sort(uint args){
-	if(args!=1)
-		die("wrong # of args\n");
-	struct Value a = pop();
-	pop();
-	if(a.type == tArray){
-		qsort(a.array->pointer, a.array->length, sizeof(struct Variable), &compare_vars)
-	}
+// void sort(uint args){
+	// if(args!=1)
+		// die("wrong # of args\n");
+	// struct Value a = pop();
+	// pop();
+	// if(a.type == tArray){
+		// qsort(a.array->pointer, a.array->length, sizeof(struct Variable), compare_vars)
+	// }
 	
-}
+// }
 
 // void seconds(uint args){
 	// if(args!=0)

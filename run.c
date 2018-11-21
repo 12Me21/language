@@ -147,7 +147,7 @@ struct Item {
 				struct {
 					uint index; //index of var
 					//Address constraint 'put constraint address here? but that would break table/array things
-				}
+				};
 				struct {
 					uint locals; //# of local variables in a scope
 					uint args; //# of inputs to a function

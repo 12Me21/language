@@ -175,16 +175,19 @@ void flush_op_stack(int pri){
 	}
 }
 
+//Get readable name of token
 char * token_name_2(struct Token token){
+	//operators
 	if(token.type == tkOperator_1)
 		return operator_name[token.operator_1];
 	if(token.type == tkOperator_2)
 		return operator_name[token.operator_2];
 	if(token.type == tkOperator_12)
 		return operator_name[token.operator_2]; //_1 and _2 should be the same here
+	//keywords
 	if(token.type == tkKeyword)
 		return keywords[token.keyword];
-	
+	//other
 	return token_name[token.type];
 }
 
@@ -204,27 +207,29 @@ void expected(char * expected){
 bool read_expression(bool allow_comma){
 	next_t();
 	switch(token.type){
-	//Values
+	// Value
 	case tkValue:
 		output((struct Item){.operator = oConstant, .value = token.value});
-	//Variable
+	// Variable
 	break;case tkWord:
 		output(make_var_item(token.word));
+	// Prefix operator
 	break;case tkOperator_1: case tkOperator_12:
 		flush_op_stack(priority[token.operator_1]+1);
 		push_op((struct Item){.operator = token.operator_1});
 		if(!read_expression(true))
-			//output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
 			expected("expression");
+	// Group
 	break;case tkLeft_Paren:
 		push_op(group_start);
 		if(!read_expression(true))
 			output((struct Item){.operator = oConstant, .value = {.type = tNArgs, .args = 0}});
-			//parse_error("Expected expression\n");
 		if(!read_token(tkRight_Paren))
 			expected("`)`");
 		flush_group();
-	//array literal
+	// Array literal
+	//input: [ list ]
+	//output: <list> <oArray>
 	break;case tkLeft_Bracket:
 		push_op(group_start);
 		read_token(tkLine_Break);
@@ -235,12 +240,13 @@ bool read_expression(bool allow_comma){
 			expected("`]`");
 		flush_group();
 		output((struct Item){.operator = oArray});
-	//table literal:
+	// Table literal
+	//input: { key = value , ... }
+	//output: <key> <value> ... <oTable>
 	break;case tkLeft_Brace:
 		read_token(tkLine_Break);
 		uint length = 0;
 		push_op(group_start);
-		//push_op(group_start);
 		if(read_expression(false)){
 			length++;
 			flush_group();
@@ -250,11 +256,10 @@ bool read_expression(bool allow_comma){
 			if(!read_expression(false))
 				expected("value");
 			flush_group();
-			while(read_token(tkOperator_2)){
-				if(token.operator_2!=oComma)
-					expected("`,`");
+			while(read_token(tkComma)){
 				push_op(group_start);
 				read_expression(false);
+				
 				length++;
 				flush_group();
 				if(!read_token(tkAssign))
@@ -264,11 +269,8 @@ bool read_expression(bool allow_comma){
 					expected("value");
 				flush_group();
 			}
-		}else{
+		}else
 			flush_group();
-		}
-		//printf("Read table with length: %d",length);
-		//flush_group();
 		if(!read_token(tkRight_Brace))
 			expected("`}`");
 		output((struct Item){.operator = oTable, .length = length});
@@ -276,15 +278,9 @@ bool read_expression(bool allow_comma){
 		output((struct Item){.operator = oAt/*meal*/});
 	break;case tkKeyword:
 		if(token.keyword == kDef){
-			//printf("p def\n");
-			//function def compiles to:
-			//jump(@skip) @func functioninfo(level, locals, args) ... x return @skip
 			struct Item * start = output((struct Item){.operator = oJump});
 			Address start_pos = output_stack_pointer;
 			struct Line start_line = real_line;
-			//if(!read_token(tkWord))
-			//	parse_error("Missing name in function definition\n");
-			//declare_variable(token.word);
 			if(!read_token(tkLeft_Paren))
 				expected("`(` in function definition");
 			//create scope
@@ -295,9 +291,7 @@ bool read_expression(bool allow_comma){
 			if(read_token(tkWord)){
 				declare_variable(token.word);
 				args++;
-				while(read_token(tkOperator_2)){
-					if(token.operator_2!=oComma)
-						expected("`,`");
+				while(read_token(tkComma)){
 					if(!read_token(tkWord))
 						expected("function parameter name");
 					declare_variable(token.word);
@@ -331,7 +325,7 @@ bool read_expression(bool allow_comma){
 	while(1){
 		next_t();
 		switch(token.type){
-		//array/table index
+		// Index
 		case tkLeft_Bracket:
 			push_op(group_start);
 			if(!read_expression(true))
@@ -340,15 +334,15 @@ bool read_expression(bool allow_comma){
 				expected("`]`");
 			flush_group();
 			output((struct Item){.operator = oIndex});
-		//infix operator
-		break;case tkOperator_2: case tkOperator_12:
-			//don't allow commas. This is for reading table literals where commas are used to separate values.
-			//(maybe a better idea would be to use a different symbol but whatever)
-			if(!allow_comma && token.operator_2 == oComma){
+		// Infix operator
+		break;case tkComma:
+			if(!allow_comma){
 				read_next = false;
 				return true;
 			}
-			//printf("i op\n");
+		case tkOperator_2: case tkOperator_12:
+			//don't allow commas. This is for reading table literals where commas are used to separate values.
+			//(maybe a better idea would be to use a different symbol but whatever)
 			flush_op_stack(priority[token.operator_2]);
 			push_op((struct Item){.operator = token.operator_2});
 			read_token(tkLine_Break); //this is one case where you're allowed to have line breaks in an expression
@@ -358,7 +352,7 @@ bool read_expression(bool allow_comma){
 			//maybe also allow line breaks after [ and before ] ?
 			if(!read_expression(true))
 				expected("expression");
-		//function call
+		// Function call
 		break;case tkLeft_Paren:
 			push_op(group_start);
 			//read arguments
@@ -604,3 +598,7 @@ struct Item * parse(FILE * stream, char * string){
 
 //idea: var <variable_name> declares a variable.
 //have an operator that applies a constraint, and after var, go back and read <variable_name> as a line of code to run the constraint and assignment.
+
+//usually {a = 3} sets x["a"] or x.a, and {["a"]=3} sets the same thing
+//change that maybe...
+//used by JS and Lua

@@ -346,7 +346,7 @@ struct Token next_token(){
 		//case '?': ...
 		case ',':
 			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oComma};
+			return (struct Token){.type = tkComma, .operator_2 = oComma};
 		case '/':
 			next();
 			return (struct Token){.type = tkOperator_2, .operator_2 = oDivide};
