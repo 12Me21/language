@@ -1,1 +1,3 @@
 wasm/* linguist-vendored
+*.prg linguist-language=Lua
+#Lua might be the most similar I guess...
