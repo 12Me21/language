@@ -267,7 +267,7 @@ bool read_expression(bool allow_comma){
 		}else{
 			flush_group();
 		}
-		printf("Read table with length: %d",length);
+		//printf("Read table with length: %d",length);
 		//flush_group();
 		if(!read_token(tkRight_Brace))
 			expected("`}`");

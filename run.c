@@ -130,7 +130,7 @@ enum Operator {
 char * operator_name[] = {
 	"Invalid Operator", "Constant", "Variable", "~", "~", "!=", "!", "%", "^", "&", "*", "-", "-", "+", "==", "=", "|",
 	"\\", "<=", "<<", "<", ">=", ">>", ">", "/", "Array Literal", "Index", "Call", "Discard", "?", "Halt",
-	"Table Literal", "Global Variables", "Return", "Jump", "or", "and", "Length", "Jump if false", "Jump if true",
+	"Table Literal", "Global Variables", "Jump", "or", "and", "Length", "Jump if false", "Jump if true",
 	"Function Info", "Return None", "Group Start", "Assign Discard", "Constrain", "Constrain End", "At", ",",	
 };
 
@@ -349,6 +349,11 @@ bool equal(struct Value a, struct Value b){
 	}
 	return false;
 }
+
+int compare_vars(struct Variable a, struct Variable b){
+	return compare(a.value, b.value);
+}
+
 //compare 2 values. a>b -> -1, a==b -> 0, a<b -> 1
 //should be 0 iff a==b but I can't guarantee this...
 int compare(struct Value a, struct Value b){
