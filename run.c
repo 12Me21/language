@@ -261,6 +261,8 @@ int run(struct Item * new_code){
 		//Output: <value>
 		break;case oIndex:; //table, key
 			b = pop(); //key
+			if(b.type==tNArgs)
+				die("Can't use a list as an index\n");
 			a = pop(); //table
 			switch(a.type){
 			case tTable:

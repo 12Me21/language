@@ -31,6 +31,13 @@ struct Entry * table_get(struct Table * table, struct Value key, bool add){
 		key_data = (char *)&(key.table);
 		key_size = sizeof(struct Table *);
 		break;
+	case tArray:
+		key_data = (char *)&(key.array);
+		key_size = sizeof(struct Array *);
+		break;
+	case tNone:
+		key_size = 0;
+		break;
 	case tBoolean:
 		key_data = (char *)&(key.boolean);
 		key_size = sizeof(bool);
@@ -38,6 +45,9 @@ struct Entry * table_get(struct Table * table, struct Value key, bool add){
 	case tFunction:
 		key_data = (char *)&(key.user_function); //bad
 		key_size = sizeof(Address);
+		break;
+	case tNArgs:
+		die("Can't use a list to index a table\n");
 	}
 	
 	struct Entry * current = table->first;
