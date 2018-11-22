@@ -36,6 +36,9 @@ for (key in Module) {
 }
 
 Module['arguments'] = [];
+Module['arguments'].push("-e");
+Module['arguments'].push(prompt("program:"));
+
 Module['thisProgram'] = './this.program';
 Module['quit'] = function(status, toThrow) {
   throw toThrow;
