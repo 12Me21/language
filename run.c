@@ -1,165 +1,3 @@
-
-jmp_buf err_ret;
-
-typedef uint32_t Address; //location in the bytecode
-typedef uint32_t uint;
-
-enum Type {
-	tNone,
-	tNumber,
-	tString,
-	tTable,
-	tArray,
-	tFunction,
-	tBoolean,
-	tNArgs, //there could be a "list" type perhaps. implemented as <items ...> <# of items>
-};
-
-char * type_name[] = { "None", "Number", "String", "Table", "Array", "Function", "Boolean", "(List)" };
-
-// Multiple things may point to the same String or Table
-struct String {
-	char * pointer;
-	uint32_t length;
-	//int references;
-};
-
-struct Variable;
-
-struct Array {
-	struct Variable * pointer;
-	uint32_t length;
-};
-
-// A value or variable
-// Variables just contain the extra "constraint_expression" field
-// Multiple things should not point to the same Value or Variable. EVER. ?
-struct Value {
-	enum Type type;
-	union {
-		double number;
-		struct String * string;
-		struct Table * table;
-		struct Array * array;
-		struct {
-			union {
-				Address user_function;
-				void (*c_function)(uint);
-			};
-			bool builtin;
-		};
-		bool boolean;
-		int args;
-	};
-	struct Variable * variable;
-};
-
-struct Variable {
-	struct Value value;
-	Address constraint_expression;
-};
-
-// every distinct operator
-// subtraction and negation are different operators
-// functions are called using the "call function" operator
-// which takes as input the function pointer and number of arguments
-// <function ptr> <args ...> <# of args> CALL
-enum Operator {
-	oInvalid,//0
-	
-	oConstant,
-	oVariable,
-	
-	//operators
-	oBitwise_Not,
-	oBitwise_Xor,
-	oNot_Equal,
-	oNot,
-	oMod,
-	oExponent,
-	oBitwise_And,
-	oMultiply,//10
-	oNegative,
-	oSubtract,
-	oAdd,
-	oEqual,
-	oBitwise_Or,
-	oFloor_Divide,
-	oLess_Or_Equal,
-	oLeft_Shift,
-	oLess,
-	oGreater_Or_Equal,
-	oRight_Shift,
-	oGreater,
-	oDivide,
-	//More operators
-	oArray,//26
-	oIndex,
-	oCall,
-	oDiscard, //29
-	
-	
-	oPrint,
-	oHalt,
-	oTable, //table literal.
-	//<key><value><key><value>...<oTable(# of items)>
-	
-	oInit_Global,
-	
-	oReturn, //35
-	oJump,
-	oLogicalOr,
-	oLogicalAnd,
-	oLength,
-	oJumpFalse,//40
-	oJumpTrue,
-	oFunction_Info,
-	
-	oReturn_None,
-	
-	oGroup_Start, //parsing only
-	
-	oAssign_Discard, //45
-	oConstrain,
-	oConstrain_End, //47
-	oAt,
-	oComma,
-	oSet_At,
-};
-
-char * operator_name[] = {
-	"Invalid Operator", "Constant", "Variable", "~", "~", "!=", "!", "%", "^", "&", "*", "-", "-", "+", "==", "=", "|",
-	"\\", "<=", "<<", "<", ">=", ">>", ">", "/", "Array Literal", "Index", "Call", "Discard", "?", "Halt",
-	"Table Literal", "Global Variables", "Jump", "or", "and", "Length", "Jump if false", "Jump if true",
-	"Function Info", "Return None", "Group Start", "Assign Discard", "Constrain", "Constrain End", "At", ",",	
-};
-
-//this takes up a lot of space (at least 40 bytes I think)... perhaps this should just be <less awful>
-struct Item {
-	enum Operator operator;
-	union {
-		struct Value value;
-		Address address; //index in bytecode
-		 //used by variable and functioninfo
-		struct {
-			uint level; //level of var or func
-			union {
-				struct {
-					uint index; //index of var
-					//Address constraint 'put constraint address here? but that would break table/array things
-				};
-				struct {
-					uint locals; //# of local variables in a scope
-					uint args; //# of inputs to a function
-				};
-			};
-		}; //simplify this ^
-		uint length; //generic length
-	};
-};
-
-//#define die longjmp(err_ret, 0)
-#define die(...) {printf(__VA_ARGS__); longjmp(err_ret, 2);}
 struct Value stack[256];
 uint32_t stack_pointer = 0;
 
@@ -173,21 +11,14 @@ void assign_variable(struct Variable * variable, struct Value value){
 	//printf("constraint: %d\n",variable->constraint_expression);
 }
 
-#define type_mismatch(type1, type2, operator) "`%s %s %s` is not allowed.\n", type_name[type1], operator_name[operator], type_name[type2]
 void type_mismatch_1(struct Value arg, enum Operator operator){
 	printf("Type error:\n");
-	if(arg.type==tNArgs && arg.args==0)
-		die(" `%s <empty list>` is not allowed.\n", operator_name[operator])
-	else
-		die(" `%s %s` is not allowed.\n", operator_name[operator], type_name[arg.type])
+	die(" `%s %s` is not allowed.\n", operator_name[operator], type_name[arg.type])
 }
 
-void type_mismatch_2(struct Value arg, enum Operator operator){
+void type_mismatch_2(struct Value arg1, struct Value arg2, enum Operator operator){
 	printf("Type error:\n");
-	if(arg.type==tNArgs && arg.args==0)
-		die(" `%s <empty list>` is not allowed.\n", operator_name[operator])
-	else
-		die(" `%s %s` is not allowed.\n", operator_name[operator], type_name[arg.type])
+	die(" `%s %s %s` is not allowed.\n", type_name[arg1.type], operator_name[operator], type_name[arg2.type])
 }
 
 struct Item * code;
@@ -227,17 +58,18 @@ void stack_discard(int amount){
 
 //calling and scope functions
 void make_variable(struct Variable * variable){
+	variable->constraint_expression = 0;
 	variable->value = (struct Value){.type = tNone};
 	variable->value.variable = variable;
 }
 struct Array * allocate_array(int length){
-	return ALLOC_INIT(struct Array, {.pointer = calloc(sizeof(struct Variable), length), .length = length});
+	return ALLOC_INIT(struct Array, {.pointer = calloc(sizeof(struct Variable), length), .length = length}); //calloc so that constraint is 0 by default!
 }
 
 struct Variable * push_scope(int locals){
 	if(scope_stack_pointer >= ARRAYSIZE(scope_stack))
 		die("Scope Stack Overflow\n");
-	struct Variable * scope = scope_stack[scope_stack_pointer++] = calloc(locals, sizeof(struct Variable)); //calloc so that constraint is 0 by default!
+	struct Variable * scope = scope_stack[scope_stack_pointer++] = malloc(locals * sizeof(struct Variable));
 	int i;
 	for(i=0;i<locals;i++)
 		make_variable(&scope[i]);
@@ -256,6 +88,7 @@ void call(Address address){
 	call_stack[call_stack_pointer++] = pos;
 	pos = address;
 }
+
 //Call a user defined function
 //stack in: | <function (unused)> <args> |
 //stack out: | |
@@ -286,110 +119,17 @@ void ret(){
 	pos = call_stack[--call_stack_pointer];
 }
 
-void read_arglist(void(* callback)(struct Value)){
-	struct Value a = pop();
+// void read_arglist(void(* callback)(struct Value)){
+	// struct Value a = pop();
 	//write a standard reusable arglist handler
-	if(a.type == tNArgs){
-		uint i;
-		for(i=a.args; i>=1; i--)
-			callback(stack_get(i));
-		stack_discard(a.args);
-	}else
-		callback(a);
-}
-
-void nothing(){};
-
-//check if a Value is truthy
-bool truthy(struct Value value){
-	if(value.type == tNone)
-		return false;
-	if(value.type == tBoolean)
-		return value.boolean;
-	if(value.type == tNArgs)
-		die("internal error\n");
-	return true;
-}
-struct Value make_boolean(bool boolean){
-	return (struct Value){.type = tBoolean, .boolean = boolean};
-}
-bool equal(struct Value a, struct Value b){
-	if(a.type == b.type){
-		switch(a.type){
-		case tNumber:
-			return a.number == b.number;
-		case tBoolean:
-			return a.boolean == b.boolean;
-		case tArray:
-			if(a.array->length!=b.array->length)
-				return false;
-			uint i;
-			for(i=0;i<a.array->length;i++)
-				if(!equal(a.array->pointer[i].value,b.array->pointer[i].value))
-					return false;
-			return true;
-			//return a.array == b.array;
-		case tTable:
-			return a.table == b.table;
-		case tString:
-			return a.string->length == b.string->length && !memcmp(a.string->pointer, b.string->pointer, a.string->length * sizeof(char));
-		case tFunction:
-			if(a.builtin==b.builtin){
-				if(a.builtin)
-					return a.c_function == b.c_function;
-				else
-					return a.user_function == b.user_function;
-			}
-			break;
-		case tNone:
-			return true;
-		default:
-			die("Internal error: Type mismatch in comparison, somehow\n");
-		}
-	}
-	return false;
-}
-
-int compare_vars(struct Variable a, struct Variable b){
-	return compare(a.value, b.value);
-}
-
-//compare 2 values. a>b -> -1, a==b -> 0, a<b -> 1
-//should be 0 iff a==b but I can't guarantee this...
-int compare(struct Value a, struct Value b){
-	if(a.type != b.type)
-		die("Type mismatch in comparison\n");
-	switch(a.type){
-	case tNumber:
-		if(a.number < b.number)
-			return -1;
-		if(a.number > b.number)
-			return 1;
-		return 0;
-	case tBoolean:
-		return a.boolean - b.boolean;
-	case tArray:
-		die("Tried to compare arrays\n");
-	case tTable:
-		die("Tried to compare tables\n");
-	case tString:;
-		uint len1 = a.string->length;
-		uint len2 = b.string->length;
-		if(len1<len2){
-			int x = memcmp(a.string->pointer, b.string->pointer, len1 * sizeof(char));
-			return x ? x : -1;
-		}
-		int x = memcmp(a.string->pointer, b.string->pointer, len2 * sizeof(char));
-		return x || len1 == len2 ? x : 1;
-	case tFunction:
-		die("Tried to compare functions\n");
-	case tNone:
-		return 0;
-	default:
-		die("Internal error: Type mismatch in comparison, somehow\n");
-	}
-}
-
+	// if(a.type == tNArgs){
+		// uint i;
+		// for(i=a.args; i>=1; i--)
+			// callback(stack_get(i));
+		// stack_discard(a.args);
+	// }else
+		// callback(a);
+// }
 double start_time;
 
 void basic_print(struct Value value){
@@ -434,7 +174,7 @@ int run(struct Item * new_code){
 	uint i = 0;
 	printf("Starting \n\n");
 	
-	while(1){
+	while(1){ // while 1 ♥
 		item = code[pos++];
 		//printf("working on item: %d, op %d. stack height: %d\n",pos,item.operator,stack_pointer);
 		switch(item.operator){
@@ -545,9 +285,9 @@ int run(struct Item * new_code){
 		break;case oCall:
 			a = pop();
 			uint args;
-			if(a.type == tNArgs){
+			if(a.type == tNArgs)
 				args = a.args;
-			}else{
+			else{
 				args = 1;
 				push(a);//optimize
 			}
@@ -572,7 +312,6 @@ int run(struct Item * new_code){
 		//Create variable scope //this is just used once at the start of the prgram
 		break;case oInit_Global:
 			level_stack[0] = push_scope(item.locals);
-			//assign_variable(level_stack[0]+1, (struct Value){.type = tFunction, .builtin = true, .c_function = &seconds});
 		//Return from function
 		break;case oReturn:
 			//todo: delete variable reference of returned value
@@ -595,42 +334,9 @@ int run(struct Item * new_code){
 		break;case oJumpFalse:
 			if(!truthy(pop()))
 				pos = item.address;
-		//Logical OR operator (with shortcutting)
-		//Input: <condition 1>
-		//Output: ?<condition 1>
-		break;case oLogicalOr:
-			if(truthy(stack_get(1)))
-				pos = item.address;
-			else
-				stack_discard(1);
-		//Logical AND operator (with shortcutting)
-		//Input: <condition 1>
-		//Output: ?<condition 1>
-		break;case oLogicalAnd:
-			if(truthy(stack_get(1)))
-				stack_discard(1);
-			else
-				pos = item.address;
-		//Length operator
-		//Input: <value>
-		//Output: <length>
-		break;case oLength:
-			a = pop();
-			unsigned int length;
-			switch(a.type){
-				case tArray:
-					length = a.array->length;
-				break;
-				case tString:
-					length = a.string->length;
-				break;
-				case tTable:
-					length = table_length(a.table);
-				break;
-				default:
-					die("Length operator expected String, Array, or Table; got %s.\n", type_name[a.type]);
-			}
-			push((struct Value){.type = tNumber, .number = (double)length});
+		//table.property
+		//property id is stored in operator.
+		//break;case oProperty:
 		//this should never run
 		break;case oFunction_Info:
 			die("Internal error: Illegal function entry\n");
@@ -687,6 +393,7 @@ int run(struct Item * new_code){
 // END
 //<A> <B>
 //how to insert B when A hasn't even finished?
+//lazy solution is to surround all functions with GOTO @SKIP ... @SKIP
 
 //important:
 //make sure that values don't contain direct pointers to strings/tables since they might need to be re-allocated.
@@ -695,77 +402,14 @@ int run(struct Item * new_code){
 //Jobs for the parser:
 // - generate a list of all properties (table.property) independantly from other words\
 
-//when parsing:
-// VAR A
-// DEF X
- // VAR B
- // DEF Y
-  // VAR C
-  // B = 1
- // END
- // Y
-// END
-
-//VAR A -> add "A" to top of scope stack. push variable pointer (scope = top, index = 0)
-//DEF X -> add "X" to top of scope stack. create variable X tFunction function=address. add layer to scope stack, push function things.
-// (note: this includes the number of local variables that must be created. which will have filled in after the function has been parsed (use block stack)
-//VAR B -> add "B" to top of scope stack. push variable pointer (scope = top, index = 0)
-//DEF Y -> "
-//VAR C -> add "C". push variable (scope = top, index = 0)
-//B -> search downwards in scope stack for "B". will push (scope = top-1, index=0)
-//...
-
 //Hoisting functions
 //This is nessesary to preserve the sanity of programmers.
 //not sure the best way to handle this.
-
-//calling a function
-//DEF TEST(A,B,C):END:TEST(1,2,3) is compiled to
-//1 2 3 3(because 3 arguments were passed) TEST CALL ... @TEST PUSHSCOPE{3} MULTIASSIGN{3}
-//CALL pops a function from the stack and calls it.
-//PUSHSCOPE pushes a scope to the scope stack, creating the right number of local variables. in this case it's 3 (because arguments are local vars)
-//MULTIASSIGN will perform multiple assignments. first it reads the stack entry before the variable list, which is the number of arguments that were passed.
-// it then assigns values to the variables, and discards everything on the stack (up to the first value passed to the function)
-// The first variables in the function scope are the function arguments. Multiassign can infer their indexes based on the number of parameters to that function.
-
-//the parser must put the function after the args, somehow.
-
-//pushing to the scope stack:
-// this will create lots of new variables
-// the tFunction type will have a function address
 
 //when a variable is encountered in the bytecode:
 //-- use its indexes to find the Variable in the scope stack.
 //-- make a copy of its value. set the variable pointer to point at the Variable in the scope stack. (note: it's important that RETURN and other operations do not preserve that pointer)
 //-- push that to the stack.
-
-//recursion idea:
-// VAR A
-// DEF X
- // VAR B
- // DEF Y
-  // VAR C
-  // B = 1
- // END
- // Y
-// END
-
-// X
-
-// X is called
-//  new scope is created
-//  B is added to that scope
-//  (VAR B) -> B in bytecode points to the 0th item at the top scope.
-//  Y is called
-//   new scope is created
-//   C is added to that scope
-//   C points to 0th item at the top scope
-//   B points to 0th item in the scope 1 from the top. (note: this is different from before, but it points to the same thing)
-
-//all variables contain 2 indexes:
-//- scope (perhaps: 0=global, 1=top, 2=top-1, etc.)
-//- index (position in that list)
-//The same variable might have different scope values depending on where it's used. (see prev. example))
 
 // big scary problem:
 
@@ -794,12 +438,6 @@ int run(struct Item * new_code){
  // return whatever2()
 // end
 
-//ok and better way to call functions:
-//<args><number of args><CALL><assignments>
-//this way, the assignments are done within the function
-//among other things
-//don't question this, please.
-
 //anyway
 //the returned function in the middle
 //during parsing, it is added to the function list just like any other function.
@@ -819,15 +457,6 @@ int run(struct Item * new_code){
 
 //There might be a "symbol" type specifically for properties. ex "table.x" compiles to: [table] [.x] [index] not [table] ["x"] [index] to improve efficiency.
 
-//constraints:
-//A = B
-//A B =
-//1: push value A to the stack
-//2: push B
-//=
-//3: CALL constraint expression (don't pop)
-//4: constraint expressions end with a special RETURN call which pops a value, throws an error if false, then does the assignment
-
 //idea: some way to access keys in a table with a number. they are stored in an ordered list, after all. perhaps table:key(x) idk. to make iteration etc. easier
 
 //make IF expressions
@@ -843,14 +472,6 @@ int run(struct Item * new_code){
 	// endif
 // )
 
-//X=@+1 compiles to
-//X <push to @ stack> @ 1 + =
-//= discards from @ stack
-
-//now I see why += etc are so common
-//not only are they efficient to convert to machine code
-//but x+=1 can just be compiled simply to X <dup> 1 +
-
 //idea: function/whatever that returns all the arguments to a function
 //print = def()
 // ?args()
@@ -860,3 +481,11 @@ int run(struct Item * new_code){
 //so it can be used here as well as for precomputing things during parsing
 //ensure that, for example, something like `Array.sum` is precomputed so that it doesn't need to do a table access every time.
 //also remember to actually implement tables....
+
+//lists:
+//lists aren't "real" like all the other types
+//they're just multiple values stored in the stack, followed by an item storing the length of the list
+//length 0 list: <# of args>
+//length 1 list: (1 regular value)
+//length 2+ list: <# of args>
+//a "real" length 1 list can be created by doing ((),value) but this isn't nessesary. Anything that accepts a list will also allow a single value, which is treated as a length-1 list.

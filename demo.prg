@@ -16,6 +16,19 @@ x = def()
 	return 7
 end
 
+'line breaks are allowed in certain cases:
+?1+
+1
+?[
+	1,
+	2,
+	3, 'allowed I guess... (not sure about this as it might hide errors)
+]
+
+'semicolons can be used to separate statements but are usually unnessesary:
+?x;?y
+?x?y
+
 'lists:
 ?1,2,3 ' ? is "print"
 ?((1,2,3,4,5))
@@ -39,7 +52,8 @@ long_variable_name = 4 / (@ + 2) - 3
 'constraints:
 var z{z != 3} 'an error is thrown if z has a value of 3
 'z = 3 'error
-var positive{@ > 0} = 1 '@ works like in =, and represents the new value (because constraints are checked after assignment)
+'var positive{@ > 0} = 1 '@ works like in =, and represents the new value (because constraints are checked after assignment)
+'@ doesn't work this way (YET)
 'positive = -1 'error
 
 'control statements:

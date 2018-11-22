@@ -9,17 +9,14 @@
 
 #include "alloc_init.c"
 
-#include "run.c"
+typedef uint32_t uint;
+jmp_buf err_ret;
+#define die(...) {printf(__VA_ARGS__); longjmp(err_ret, 2);}
+
+#include "val_item.c"
 #include "token.c"
 #include "parser.c"
-
-uint get_line(Address address){
-	uint i;
-	for(i=0;i<ARRAYSIZE(line_position_in_output);i++)
-		if(line_position_in_output[i]>address)
-			break;
-	return i-1;
-}
+#include "run.c"
 
 int main(int argc, char * argv[]){
 	FILE * input = NULL;

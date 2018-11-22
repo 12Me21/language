@@ -1,19 +1,16 @@
-var long_variable_name = 0
-?long_variable_name
-long_variable_name = long_variable_name + 3
-?long_variable_name
-long_variable_name = @ + 3
-?long_variable_name
-'long_variable_name += 3
+?1,1<<2
 
-?()
+var test = def()
+	?"test called"
+	return 7
+end
 
-var x = {"a" = 4, 4 = "a", "4" = "four"}
-var table{table == x} = x
-?table["a"] '4
-?table[4] 'a
-?table["4"] 'four
-table[table]=table
-?table[table][table][table][table][4] 'a
-table = 4 'error
-?table
+'while 1
+'?false or test() + 1 + 2
+'wend
+
+var x
+x =@or 1
+
+var y{(?@) or 1}
+y=3

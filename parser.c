@@ -1,65 +1,3 @@
-int priority[] = {
-	oInvalid,
-	
-	oConstant,
-	oVariable,
-	
-	//operators
-	99,
-	4,
-	7,
-	99,
-	11,
-	12,
-	6,
-	11,
-	99,
-	10,
-	10,
-	7,
-	5,
-	11,
-	8,
-	9,
-	8,
-	8,
-	9,
-	8,
-	11,
-	//More operators
-	oArray,
-	oIndex,
-	oCall,
-	oDiscard,
-	
-	
-	-66, //? real
-	oHalt,
-	oTable, //table literal.
-	//<key><value><key><value>...<oTable(# of items)>
-	
-	oInit_Global,
-	
-	oReturn,
-	oJump,
-	oLogicalOr,
-	oLogicalAnd,
-	oLength,
-	oJumpFalse,
-	oJumpTrue,
-	oFunction_Info,
-	
-	oReturn_None,
-	
-	-99, //parsing only
-	//...
-	oAssign_Discard,
-	oConstrain,
-	oConstrain_End,
-	oAt,
-	-2, //comma
-};
-
 struct Token token;
 bool read_next;
 
@@ -71,7 +9,9 @@ void next_t(){
 	//printf("token t %d\n",token.type);
 }
 
-bool read_token(int wanted_type){
+//try to read a specific token type
+//returns true if successful.
+bool read_token(enum Token_Type wanted_type){
 	next_t();
 	//printf("rt: %d %d\n",token.type,wanted_type);
 	if(token.type==wanted_type){
@@ -82,10 +22,11 @@ bool read_token(int wanted_type){
 	return false;
 }
 
+// basically, (
 struct Item group_start = {.operator = oGroup_Start}; //set priority to -2
 
 struct Item * output_stack;
-
+//output_length is defined in token.c for some reason
 struct Item * output(struct Item item){
 	//todo:
 	//if item is operator:
@@ -93,48 +34,63 @@ struct Item * output(struct Item item){
 	//2: check if all of the inputs are constants
 	//3: evaluate
 	//optimization!!!
-	output_stack[output_stack_pointer] = item;
-	return &(output_stack[output_stack_pointer++]);
+	output_stack[output_length] = item;
+	return &(output_stack[output_length++]);
 }
 
+// Operator stack
+// This stores operators temporarily during parsing (using shunting yard algorithm)
 struct Item op_stack[256];
-uint op_stack_pointer = 0;
-
+uint op_length = 0;
 void push_op(struct Item item){
-	if(op_stack_pointer >= ARRAYSIZE(op_stack))
+	if(op_length >= ARRAYSIZE(op_stack))
 		parse_error("Operator Stack Overflow\n");
-	op_stack[op_stack_pointer++] = item;
+	op_stack[op_length++] = item;
 }
 struct Item pop_op(){
-	if(op_stack_pointer <= 0)
+	if(op_length <= 0)
 		parse_error("Internal Error: Stack Underflow\n");
-	return op_stack[--op_stack_pointer];
+	return op_stack[--op_length];
 }
-
+//Return the previously popped value to the stack
 void resurrect_op(){
-	if(op_stack_pointer >= ARRAYSIZE(op_stack))
+	if(op_length >= ARRAYSIZE(op_stack))
 		parse_error("Operator Stack Overflow\n");
-	op_stack_pointer++;
+	op_length++;
 }
 
-uint * p_level_stack[256];
+//Scope (level) stack
+//This keeps track of local variables during parsing.
+uint * p_level_stack[256]; //256 = # of levels
 uint scope_length = 0;
-uint locals_length[256];
+uint locals_length[256]; //256 = # of local variables per scope
 
 void p_push_scope(){
 	if(scope_length >= ARRAYSIZE(p_level_stack))
-		parse_error("Scope stack overflow. (Too many nested functions)\n");
+		parse_error("Level stack overflow. (Too many nested functions)\n");
 	p_level_stack[scope_length] = malloc(256 * sizeof(uint));
 	locals_length[scope_length++] = 0;
 }
-
-//note: the thing that the parser calls "scope" is called "level" in run.c
-
 void discard_scope(){
 	if(scope_length <= 0)
 		parse_error("Internal Error: Scope Stack Underflow\n");
-	scope_length--;
+	free(p_level_stack[--scope_length]);
 }
+
+// char * property_names[65536];
+// uint property_names_length = 0;
+// uint register_property_name(uint word){
+	// uint i;
+	// for(i=0;i<property_names_length;i++)
+		// if(property_names[i]==word)
+			// return i;
+	// if(property_names_length >= ARRAYSIZE(property_names))
+		// parse_error("Too many property names");
+	// property_names[property_names_length] = word;
+	// return property_names_length++;
+// }
+
+//note: the thing that the parser calls "scope" is called "level" in run.c
 
 struct Item declare_variable(uint word){
 	if(locals_length[scope_length-1] >= 256)
@@ -157,14 +113,13 @@ struct Item make_var_item(uint word){
 		}
 	}
 	//new variable that hasn't been used before:
-	//todo: throw an error here and add a special VAR statement
-	parse_error("Undefined variable: '%s' (Use `var`)\n", name_table[word]);
+	parse_error("Undefined variable: '%s' (Use `var`)\n", name_table[word]); //remove this to disable "OPTION STRICT"
 	return declare_variable(word);
 }
 
 void flush_op_stack(int pri){
 	//printf("flush op\n");
-	while(op_stack_pointer){
+	while(op_length){
 		struct Item top = pop_op();
 		if(priority[top.operator] >= pri) //might need to use >= for binary ops idk?
 			output(top);
@@ -175,22 +130,6 @@ void flush_op_stack(int pri){
 	}
 }
 
-//Get readable name of token
-char * token_name_2(struct Token token){
-	//operators
-	if(token.type == tkOperator_1)
-		return operator_name[token.operator_1];
-	if(token.type == tkOperator_2)
-		return operator_name[token.operator_2];
-	if(token.type == tkOperator_12)
-		return operator_name[token.operator_2]; //_1 and _2 should be the same here
-	//keywords
-	if(token.type == tkKeyword)
-		return keywords[token.keyword];
-	//other
-	return token_name[token.type];
-}
-
 void flush_group(){
 	struct Item item;
 	while((item = pop_op()).operator != oGroup_Start)
@@ -198,7 +137,6 @@ void flush_group(){
 }
 
 enum Keyword read_line();
-bool read_full_expression();
 
 void expected(char * expected){
 	parse_error("Expected %s, got `%s`\n", expected, token_name_2(token));
@@ -215,7 +153,9 @@ bool read_expression(bool allow_comma){
 		output(make_var_item(token.word));
 	// Prefix operator
 	break;case tkOperator_1: case tkOperator_12:
-		flush_op_stack(priority[token.operator_1]+1);
+		flush_op_stack(priority[token.operator_1]+1); //adding 1 here is a dangerous hack to get like, left associativity or something
+		//make sure prefix ops have priorities which are spread out so this won't break too much.
+		
 		push_op((struct Item){.operator = token.operator_1});
 		if(!read_expression(true))
 			expected("expression");
@@ -279,7 +219,7 @@ bool read_expression(bool allow_comma){
 	break;case tkKeyword:
 		if(token.keyword == kDef){
 			struct Item * start = output((struct Item){.operator = oJump});
-			Address start_pos = output_stack_pointer;
+			Address start_pos = output_length;
 			struct Line start_line = real_line;
 			if(!read_token(tkLeft_Paren))
 				expected("`(` in function definition");
@@ -309,7 +249,7 @@ bool read_expression(bool allow_comma){
 			if(keyword!=kEnd)
 				unexpected_end(keywords[keyword], keywords[kEnd], keywords[kDef], start_line);
 			output((struct Item){.operator = oReturn_None});
-			start->address = output_stack_pointer;
+			start->address = output_length;
 			function_info->locals = locals_length[scope_length-1];
 			discard_scope();
 			output((struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = false, .user_function = start_pos}});
@@ -334,13 +274,19 @@ bool read_expression(bool allow_comma){
 				expected("`]`");
 			flush_group();
 			output((struct Item){.operator = oIndex});
+		break;
 		// Infix operator
-		break;case tkComma:
+		case tkComma:
 			if(!allow_comma){
 				read_next = false;
 				return true;
 			}
-		case tkOperator_2: case tkOperator_12:
+			flush_op_stack(priority[token.operator_2]);
+			push_op((struct Item){.operator = token.operator_2});
+			read_token(tkLine_Break);
+			if(!read_expression(true))
+				pop_op();
+		break;case tkOperator_2: case tkOperator_12: //no break
 			//don't allow commas. This is for reading table literals where commas are used to separate values.
 			//(maybe a better idea would be to use a different symbol but whatever)
 			flush_op_stack(priority[token.operator_2]);
@@ -352,6 +298,16 @@ bool read_expression(bool allow_comma){
 			//maybe also allow line breaks after [ and before ] ?
 			if(!read_expression(true))
 				expected("expression");
+		// logical "or" and "and"
+		break;case tkOr:;
+			struct Item * start = output((struct Item){.operator = oLogicalOr});
+			flush_op_stack(priority[oLogicalOr]);
+			read_token(tkLine_Break);
+			if(!read_expression(true))
+				expected("expression");
+			start->address = output_length;
+		//break;case tkAnd:
+			
 		// Function call
 		break;case tkLeft_Paren:
 			push_op(group_start);
@@ -364,6 +320,13 @@ bool read_expression(bool allow_comma){
 				expected("`)`");
 			flush_group();
 			output((struct Item){.operator = oCall});
+		// .
+		// break;case tkDot:
+			// edit this to allow keywords after . maybe
+			// if(!read_token(tkWord))
+				// expected("Property Name");
+			// push_property_name(name_table[token.word]);
+			// push_op((struct Item){.operator = oProperty, .property = property_names_length-1});
 		break;default:
 			read_next = false;
 			return true;
@@ -385,6 +348,7 @@ enum Keyword read_line(){
 	//printf("parser line\n");
 	if(read_full_expression()){
 		if(read_token(tkAssign)){
+			//optimize: only insert when @ is actually used in the value expression.
 			output((struct Item){.operator = oSet_At});
 			read_full_expression();
 			output((struct Item){.operator = oAssign_Discard});
@@ -399,7 +363,7 @@ enum Keyword read_line(){
 			switch(token.keyword){
 			//WHILE
 			case kWhile:;
-				Address start_pos = output_stack_pointer;
+				Address start_pos = output_length;
 				struct Line start_line = real_line;
 				if(!read_full_expression())
 					parse_error("Missing condition in `while`\n");
@@ -411,8 +375,8 @@ enum Keyword read_line(){
 				if(keyword!=kWend)
 					unexpected_end(keywords[keyword], keywords[kWend], keywords[kWhile], start_line);
 				output((struct Item){.operator = oJump, .address = start_pos});
-				start->address = output_stack_pointer;
-			
+				start->address = output_length;
+			// IF
 			break;case kIf:
 				start_line = real_line;
 				//read condition
@@ -431,18 +395,19 @@ enum Keyword read_line(){
 				}while(!keyword);
 				
 				if(keyword == kEndif){
-					start->address = output_stack_pointer;
+					start->address = output_length;
 				}else if(keyword == kElseif){
 					//you need to do lots of stuff here
-					parse_error("UNSUPPORTED\n");
+					parse_error("ELSEIF UNSUPPORTED\n");
 				}else if(keyword == kElse){
 					
-					parse_error("UNSUPPORTED\n");
+					parse_error("ELSE UNSUPPORTED\n");
 				}else{
 					unexpected_end(keywords[keyword], "Endif/`Elseif`/`Else", keywords[kIf], start_line);
 				}
+			// repeat
 			break;case kRepeat:
-				start_pos = output_stack_pointer;
+				start_pos = output_length;
 				start_line = real_line;
 				do{
 					keyword = read_line();
@@ -452,62 +417,29 @@ enum Keyword read_line(){
 				if(!read_full_expression())
 					parse_error("Missing condition in `until`\n");
 				output((struct Item){.operator = oJumpFalse, .address = start_pos});
+			// def
 			break;case kDef:
 				//function def compiles to:
 				//jump(@skip) @func functioninfo(level, locals, args) ... x return @skip
 				parse_error("coming soon\n");
-				start = output((struct Item){.operator = oJump});
-				start_line = real_line;
-				if(!read_token(tkWord))
-					parse_error("Missing name in function definition\n");
-				declare_variable(token.word);
-				if(!read_token(tkLeft_Paren))
-					parse_error("Missing `(` in function definition\n");
-				//create scope
-				p_push_scope();
-				uint level = scope_length-1;
-				//read argument list
-				uint args=0;
-				if(read_token(tkWord)){
-					declare_variable(token.word);
-					args++;
-					while(read_token(tkComma)){
-						if(!read_token(tkWord))
-							parse_error("Expected argument\n");
-						declare_variable(token.word);
-						args++;
-					}
-				}
-				if(!read_token(tkRight_Paren))
-					parse_error("Missing `)` in function definition\n");
-				struct Item * function_info = output((struct Item){.operator = oFunction_Info, .level = level, .args = args});
-				//read function body
-				do{
-					keyword = read_line();
-				}while(!keyword);
-				if(keyword!=kEnd)
-					unexpected_end(keywords[keyword], keywords[kEnd], keywords[kDef], start_line);
-				output((struct Item){.operator = oReturn_None});
-				start->address = output_stack_pointer;
-				function_info->locals = locals_length[scope_length-1];
-				discard_scope();
+			//return
 			break;case kReturn:
-				if(read_full_expression()){
+				if(read_full_expression())
 					output((struct Item){.operator = oReturn});
-				}else{
+				else
 					output((struct Item){.operator = oReturn_None});
-				}
+			// var
 			break;case kVar:
 				if(!read_token(tkWord))
 					parse_error("Missing name in variable declaration\n");
 				struct Item variable = declare_variable(token.word);
 				if(read_token(tkLeft_Brace)){
 					start = output((struct Item){.operator = oJump});
-					Address start_pos = output_stack_pointer;
+					Address start_pos = output_length;
 					if(!read_full_expression())
 						parse_error("Missing constraint expression\n");
 					output((struct Item){.operator = oConstrain_End});
-					start->address = output_stack_pointer;
+					start->address = output_length;
 					//todo: store `start`... somewhere...
 					if(!read_token(tkRight_Brace))
 						parse_error("missing `}`");
@@ -522,18 +454,13 @@ enum Keyword read_line(){
 				}else{
 					read_next = false;
 				}
+			//"End" tokens
 			break;case kEndif:case kWend:case kElse:case kElseif:case kUntil:case kEnd:
-				//"End" tokens
 				return token.keyword;
-				//if(token.keyword != expect_end)
-				//	parse_error("expected keyword, got a different keyword\n");
-				//return false;
 			break;default:
 				parse_error("Unsupported token\n");
 			}
 		break;default:
-			//if(expect_end)
-			//	parse_error("expected keyword, got EOF\n");
 			return -1;
 		}
 	}
@@ -544,8 +471,9 @@ enum Keyword read_line(){
 	
 // }
 
+//parser/tokenizer can take either stream or string as input
+//This is an ugly hack but I need to use it because my C compiler doesn't have `fmemopen`
 struct Item * parse(FILE * stream, char * string){
-	//printf("Parser started\n");
 	output_stack = malloc(sizeof(struct Item) * 65536);
 	
 	if(stream)
@@ -557,32 +485,15 @@ struct Item * parse(FILE * stream, char * string){
 	
 	output((struct Item){.operator = oInit_Global});
 	
-	//printf("Parser started (for real)\n");
 	while(read_line()!=-1);
 	
 	if(scope_length!=1)
 		parse_error("internal error: scope mistake\n");
-	//printf("Parser finished\n");
-	//printf("%d global variables\n", locals_length[0]);
+	
 	output((struct Item){.operator = oHalt});
 	output_stack[0].locals = locals_length[0];
 	return output_stack;
 }
-
-//idea: read_full_expression reads a semicolon-separated list, and discards all but the last item.
-//so things like {?1,2,3;true} are parsed correctly!
-
-//that was a bad idea
-//maybe make comma separated lists their own type
-//they basically are, I mean
-//allow them to exist outside of specific situations
-//use them in all places
-//since they are stored in the stack as <values> <nargs>
-//they shouldn't cause any problems since nargs is its own type and that'll throw errors in most places
-
-//constraints:
-//current: = calls constraint function, RETURN does the assignment and validation
-//better: = does assignment and THEN calls constraint function, and RETURN will do validation and throw the error.
 
 //parsing tables:
 //1: read key expression
