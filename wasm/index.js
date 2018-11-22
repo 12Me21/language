@@ -36,9 +36,6 @@ for (key in Module) {
 }
 
 Module['arguments'] = [];
-Module['arguments'].push("-e");
-Module['arguments'].push(prompt("program:"));
-
 Module['thisProgram'] = './this.program';
 Module['quit'] = function(status, toThrow) {
   throw toThrow;
@@ -1756,7 +1753,7 @@ var ASM_CONSTS = [];
 
 STATIC_BASE = GLOBAL_BASE;
 
-STATICTOP = STATIC_BASE + 545328;
+STATICTOP = STATIC_BASE + 546304;
 /* global initializers */  __ATINIT__.push();
 
 
@@ -1765,7 +1762,7 @@ STATICTOP = STATIC_BASE + 545328;
 
 
 
-var STATIC_BUMP = 545328;
+var STATIC_BUMP = 546304;
 Module["STATIC_BASE"] = STATIC_BASE;
 Module["STATIC_BUMP"] = STATIC_BUMP;
 
