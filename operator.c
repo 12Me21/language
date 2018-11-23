@@ -1,48 +1,31 @@
 break;case oBitwise_Not:;
-	struct Value a = pop();
-	if(a.type == tNumber)
-		push((struct Value){.type = tNumber, .number = (double)~(uint)a.number});
-	else
-		type_mismatch_1(a, oBitwise_Not);
+	struct Value a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = (double)~(uint)a.number});
 break;case oBitwise_Xor:;
-	struct Value b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = (double)((uint)a.number^(uint)b.number)});
-	else
-		type_mismatch_2(a, b, oBitwise_Xor);
+	struct Value b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = (double)((uint)a.number^(uint)b.number)});
 break;case oNot_Equal:;
-	b = pop();
-	a = pop();
+	b = pop_no_lists();
+	a = pop_no_lists();
 	push(make_boolean(!equal(a,b)));
 break;case oNot:
-	push(make_boolean(!truthy(pop())));
+	push(make_boolean(!truthy(pop_no_lists())));
 break;case oMod:
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = fmod(a.number, b.number)});
-	else
-		die("Type mismatch in %%\n");
+	b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = fmod(a.number, b.number)});
 break;case oExponent:
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = pow(a.number, b.number)});
-	else
-		die("Type mismatch in ^\n");
+	b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = pow(a.number, b.number)});
 break;case oBitwise_And:
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = (double)((uint)a.number&(uint)b.number)});
-	else
-		type_mismatch_2(a, b, oBitwise_And);
+	b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = (double)((uint)a.number&(uint)b.number)});
 break;case oMultiply:
-	b = pop();
-	a = pop();
-	if(b.type != tNumber)
-		type_mismatch_2(a, b, oMultiply);
+	b = pop_type(tNumber);
+	a = pop_l();
 	switch(a.type){
 	case tNumber:
 		push((struct Value){.type = tNumber, .number = a.number * b.number});
@@ -60,25 +43,16 @@ break;case oMultiply:
 		type_mismatch_2(a, b, oMultiply);
 	}
 break;case oNegative:
-	a = pop();
-	if(a.type == tNumber)
-		push((struct Value){.type = tNumber, .number = -a.number});
-	else
-		type_mismatch_1(a, oNegative);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = -a.number});
 break;case oSubtract:
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = a.number - b.number});
-	else
-		die("Type mismatch in -\n");
+	b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = a.number - b.number});
 break;case oAdd:;
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = a.number + b.number});
-	else
-		die("Type mismatch in +\n");
+	b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = a.number + b.number});
 break;case oEqual:
 	b = pop_no_lists();
 	a = pop_no_lists();
@@ -88,50 +62,38 @@ break;case oBitwise_Or:
 break;case oFloor_Divide:
 	die("unimplemented");
 break;case oLess_Or_Equal:
-	b=pop();
-	push(make_boolean(compare(pop(),b)<1));
+	b=pop_no_lists();
+	push(make_boolean(compare(pop_no_lists(),b)<=0));
 break;case oLeft_Shift:
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = (double)((uint)a.number<<(uint)b.number)});
-	else
-		type_mismatch_2(a, b, oLeft_Shift);
+	b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = (double)((uint)a.number<<(uint)b.number)});
 break;case oLess:
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push(make_boolean(a.number < b.number));
-	else
-		die("Type mismatch in <\n");
+	b=pop_no_lists();
+	push(make_boolean(compare(pop_no_lists(), b) < 0));
 break;case oGreater_Or_Equal:
-	die("unimplemented");
+	b=pop_no_lists();
+	push(make_boolean(compare(pop_no_lists(),b)>=0));
 break;case oRight_Shift:
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = (double)((uint)a.number>>(uint)b.number)});
-	else
-		type_mismatch_2(a, b, oRight_Shift);
+	b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = (double)((uint)a.number>>(uint)b.number)});
 break;case oGreater:
-	die("unimplemented");
+	b=pop_no_lists();
+	push(make_boolean(compare(pop_no_lists(), b) > 0));
 break;case oDivide:
-	b = pop();
-	a = pop();
-	if(a.type == tNumber && b.type == tNumber)
-		push((struct Value){.type = tNumber, .number = a.number / b.number});
-	else
-		type_mismatch_2(a, b, oDivide);
+	b = pop_type(tNumber);
+	a = pop_type(tNumber);
+	push((struct Value){.type = tNumber, .number = a.number / b.number});
 break;case oPrint:
-	a = pop();
+	a = pop_l();
 	if(a.type == tNArgs){
 		uint i;
-		for(i=a.args; i>=1; i--){
-			basic_print(stack_get(i));
-			if(i!=1)
+		for(i=0; i<a.args; i++){
+			if(i)
 				printf("\t");
+			basic_print(list_get(i));
 		}
-		stack_discard(a.args);
 	}else
 		basic_print(a);
 	printf("\n");
@@ -171,7 +133,7 @@ break;case oComma:
 //Input: <value>
 //Output: <length>
 break;case oLength:
-	a = pop();
+	a = pop_l();
 	unsigned int length;
 	switch(a.type){
 		case tArray:
@@ -194,24 +156,23 @@ break;case oLogicalOr:
 	if(truthy(stack_get(1)))
 		pos = item.address;
 	else
-		stack_discard(1);
+		pop_l();
 //Logical AND operator (with shortcutting)
 //Input: <condition 1>
 //Output: ?<condition 1>
 break;case oLogicalAnd:
 	if(truthy(stack_get(1)))
-		stack_discard(1);
+		pop_l();
 	else
 		pos = item.address;
 break;case oIn:
-	a = pop();
+	a = pop_l();
 	switch(a.type){
 	//value in list
 	case tNArgs:
-		stack_discard(a.args);
 		b = pop_no_lists();
 		for(i=0;i<a.args;i++)
-			if(equal(b, stack_get(-1-i))){
+			if(equal(b, list_get(i))){
 				push((struct Value){.type = tNumber, .number = (double)i});
 				goto found_in;
 			}

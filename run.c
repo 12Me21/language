@@ -56,10 +56,31 @@ struct Value stack_get(int depth){
 		die("Internal Error: Stack Underflow (in get)\n");
 	return stack[stack_pointer-depth];
 }
+struct Value list_get(uint index){
+	if(stack_pointer+index >= ARRAYSIZE(stack))
+		die("Internal Error: Stack Overflow (in get)\n");
+	return stack[stack_pointer+index];
+}
+struct Value pop_type(enum Type type){
+	struct Value a = pop();
+	if(a.type != type)
+		die("Wrong type\n");
+	return a;
+}
+
+
 void stack_discard(int amount){
 	if(stack_pointer-amount < 0)
 		die("Internal Error: Stack Underflow (in discard)\n");
 	stack_pointer -= amount;
+}
+struct Value pop_l(){
+	if(stack_pointer <= 0)
+		die("Internal Error: Stack Underflow (in pop)\n");
+	struct Value a = stack[--stack_pointer];
+	if(a.type==tNArgs)
+		stack_discard(a.args);
+	return a;
 }
 
 //calling and scope functions

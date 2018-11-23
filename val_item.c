@@ -331,8 +331,8 @@ bool truthy(struct Value value){
 		return false;
 	if(value.type == tBoolean)
 		return value.boolean;
-	if(value.type == tNArgs)
-		die("internal error\n");
+	//if(value.type == tNArgs)
+	//	die("internal error\n");
 	return true;
 }
 struct Value make_boolean(bool boolean){
