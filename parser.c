@@ -529,3 +529,5 @@ struct Item * parse(FILE * stream, char * string){
 //and to determine if the main array has gotten too small...
 //this isn't worth doing, really.
 //:(
+
+//syntax for constraints in arrays?

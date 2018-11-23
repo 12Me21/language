@@ -387,12 +387,6 @@ int run(struct Item * new_code){
 // IF A THEN B ELSEIF C THEN D ELSE E ENDIF
 // A IF(@ELSE1) B GOTO(@SKIP) @ELSE1 C IF(@ELSE2) D GOTO(@SKIP) @ELSE2 E @SKIP
 
-// WHILE A B WEND
-// @LOOP A IF(@SKIP) B GOTO(@LOOP) @SKIP
-
-// REPEAT A UNTIL B
-// @LOOP A B IFN(@LOOP)
-
 // FOR A = B TO C : D : NEXT
 //
 
@@ -424,49 +418,7 @@ int run(struct Item * new_code){
 //-- make a copy of its value. set the variable pointer to point at the Variable in the scope stack. (note: it's important that RETURN and other operations do not preserve that pointer)
 //-- push that to the stack.
 
-// big scary problem:
-
-// function whatever(x)
- // return function()
-  // print(x)
- // end
-// end
-
-//where the heck is X stored?
-
 //solve closures later
-
-//so basically, what should happen is...
-//each value that stores a function will keep track of:
-//1: the function index (there will be a list of functions, which keeps track of their argument lists and address)
-//2: variables
-
-// function whatever(x)
- // function whatever2()
-  // var y=3
-  // return function(z)
-   // print(x,y,z)
-  // end
- // end
- // return whatever2()
-// end
-
-//anyway
-//the returned function in the middle
-//during parsing, it is added to the function list just like any other function.
-//however, because it is a returned function...
-//during runtime its local variables must be captured.
-//a list of local variables is stored after the function or something
-//and during parsing, each variable which isn't specifically defined in that function is given a new index.
-//so rather than x,y,z being in all different scopes, x and y are marked as closure variables, and will be accessed from the value list stored inside the function value.
-//so x might be (scope: -1, index: 0) etc.
-//whatever() will return a value like:
-//
-//	.type = tFunction
-//	.function = 2
-//	.vars
-
-//worry about this later
 
 //There might be a "symbol" type specifically for properties. ex "table.x" compiles to: [table] [.x] [index] not [table] ["x"] [index] to improve efficiency.
 
