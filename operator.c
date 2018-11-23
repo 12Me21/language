@@ -81,8 +81,19 @@ break;case oAdd:;
 		die("Type mismatch in +\n");
 break;case oEqual:
 	b = pop();
-	a = pop();
-	push(make_boolean(equal(a,b)));
+	if(b.type==tNArgs){
+		a = stack_get(b.args+1);
+		for(i=0;i<b.args;i++)
+			if(equal(a,stack_get(i+1))){
+				push(make_boolean(true));
+				goto found_equal;
+			}
+		push(make_boolean(false));
+	}else{
+		a = pop();
+		push(make_boolean(equal(a,b)));
+	}
+	found_equal:;
 break;case oBitwise_Or:
 	die("unimplemented");
 break;case oFloor_Divide:
@@ -137,16 +148,35 @@ break;case oPrint:
 	printf("\n");
 	push((struct Value){.type = tNone});
 break;case oComma:
-	b = pop(); //new value
-	a = pop(); //list terminator (NArgs) or first value
-	if(a.type == tNArgs){
-		push(b);
-		a.args++;
-		push(a);
-	}else{
-		push(a);
-		push(b);
-		push((struct Value){.type = tNArgs, .args = 2});
+	b = pop();
+	if(b.type == tNArgs){ //?, list
+		a = stack_get(b.args+1);
+		if(a.type == tNArgs){ //list, list
+			die("can't merge 2 lists"); //mm
+			memmove(stack+stack_pointer-b.args-1, stack+stack_pointer-b.args, b.args * sizeof(struct Item));
+			pop();
+			b.args += a.args;
+			//printf("ll %d\n",b.args);
+			push(b);
+		}else{ //value, list
+			die("can't merge 2 lists"); //mm
+			b.args++;
+			push(b);
+			//printf("vl\n");
+		}
+		//die("can't merge 2 lists"); //mm
+	}else{ //?, value
+		a = pop();
+		if(a.type == tNArgs){ //list, value
+			//die("can't merge 2 lists"); //mm
+			push(b);
+			a.args++;
+			push(a);
+		}else{ //value, value
+			push(a);
+			push(b);
+			push((struct Value){.type = tNArgs, .args = 2});
+		}
 	}
 //Length operator
 //Input: <value>
@@ -184,3 +214,8 @@ break;case oLogicalAnd:
 		stack_discard(1);
 	else
 		pos = item.address;
+	
+//I feel like lists could be optimized
+//like you have A,B,C, that means it has to make A,B into a list and then add C to that
+//not very efficient...
+//if commas were instead compiled into a "make the last <x> items into a list" operator... idk

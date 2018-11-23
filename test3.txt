@@ -1,16 +1,5 @@
-?1,1<<2
-
 var test = def()
-	?"test called"
-	return 7
+	return 4,5,6,7
 end
 
-'while 1
-'?false or test() + 1 + 2
-'wend
-
-var x
-x =@or 1
-
-var y{(?@) or 1}
-y=3
+?1,2,3,test(),8,9

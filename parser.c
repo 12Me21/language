@@ -513,3 +513,12 @@ struct Item * parse(FILE * stream, char * string){
 //usually {a = 3} sets x["a"] or x.a, and {["a"]=3} sets the same thing
 //change that maybe...
 //used by JS and Lua
+
+//array[start LENGTH length] -> new array which points to part of the old array.
+//might be dangerous if the original array is resized or reallocated
+//also might ruin garbage collection
+//...
+//the sub-array must hold a reference back to the main array, so that the main array's reference count can be modified too
+//and to determine if the main array has gotten too small...
+//this isn't worth doing, really.
+//:(
