@@ -93,6 +93,7 @@ void discard_scope(){
 //note: the thing that the parser calls "scope" is called "level" in run.c
 
 struct Item declare_variable(uint word){
+	//printf("declare var: %d at level %d\n", word, scope_length);
 	if(locals_length[scope_length-1] >= 256)
 		parse_error("Local Variable Stack Overflow\n");
 	p_level_stack[scope_length-1][locals_length[scope_length-1]] = word;
@@ -101,6 +102,7 @@ struct Item declare_variable(uint word){
 
 struct Item make_var_item(uint word){
 	uint i;
+	//printf("found var: %d\n", word);
 	//This will break if ssp1 is 0. Make sure the global scope is created at the beginning!
 	//search for variable in existing scopes, starting from the current one and working down towards global.
 	//printf("scope length %d\n",scope_length);
@@ -477,11 +479,16 @@ struct Item * parse(FILE * stream, char * string){
 	output_stack = malloc(sizeof(struct Item) * 65536);
 	
 	if(stream)
-		init(stream);
+		init_stream(stream);
 	else
 		init_string(string);
 	read_next=true;
 	p_push_scope();
+	//declare builtin variables/function
+	uint i;
+	for(i=0;i<ARRAYSIZE(builtins);i++){
+		declare_variable(i);
+	}
 	
 	output((struct Item){.operator = oInit_Global});
 	

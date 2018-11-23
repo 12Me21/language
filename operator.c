@@ -80,20 +80,9 @@ break;case oAdd:;
 	else
 		die("Type mismatch in +\n");
 break;case oEqual:
-	b = pop();
-	if(b.type==tNArgs){
-		a = stack_get(b.args+1);
-		for(i=0;i<b.args;i++)
-			if(equal(a,stack_get(i+1))){
-				push(make_boolean(true));
-				goto found_equal;
-			}
-		push(make_boolean(false));
-	}else{
-		a = pop();
-		push(make_boolean(equal(a,b)));
-	}
-	found_equal:;
+	b = pop_no_lists();
+	a = pop_no_lists();
+	push(make_boolean(equal(a,b)));
 break;case oBitwise_Or:
 	die("unimplemented");
 break;case oFloor_Divide:
@@ -214,8 +203,49 @@ break;case oLogicalAnd:
 		stack_discard(1);
 	else
 		pos = item.address;
-	
+break;case oIn:
+	a = pop();
+	switch(a.type){
+	//value in list
+	case tNArgs:
+		stack_discard(a.args);
+		b = pop_no_lists();
+		for(i=0;i<a.args;i++)
+			if(equal(b, stack_get(-1-i))){
+				push((struct Value){.type = tNumber, .number = (double)i});
+				goto found_in;
+			}
+		push((struct Value){.type = tNone});
+	//value in array
+	break;case tArray:
+		b = pop_no_lists();
+		for(i=0;i<a.array->length;i++)
+			if(equal(b, a.array->pointer[i].value)){
+				push((struct Value){.type = tNumber, .number = (double)i});
+				goto found_in;
+			}
+		push((struct Value){.type = tNone});
+	//todo: value in table, substring in string
+	break;case tString:
+		b = pop();
+		if(b.type!=tString)
+			die("expected string\n");
+		for(i=0;i<a.string->length - b.string->length;i++)
+			if(!memcmp(a.string->pointer, b.string->pointer, b.string->length * sizeof(char))){
+				push((struct Value){.type = tNumber, .number = (double)i});
+				goto found_in;
+			}
+		push((struct Value){.type = tNone});
+	break;default:
+		die("not implemented\n");
+	}
+	found_in:;
+
 //I feel like lists could be optimized
 //like you have A,B,C, that means it has to make A,B into a list and then add C to that
 //not very efficient...
 //if commas were instead compiled into a "make the last <x> items into a list" operator... idk
+
+//lists are evil
+
+//also implement builtins PLEASE

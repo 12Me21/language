@@ -1,5 +1,1 @@
-var test = def()
-	return 4,5,6,7
-end
-
-?1,2,3,test(),8,9
+?"str" in "string"

@@ -66,26 +66,39 @@ void next(){
 	//printf("char: %c\n",c);
 }
 
-void init(FILE * new_stream){
-	stream = new_stream;
+//typedef uint Word;
+
+#include "builtins.h"
+
+//put builtin functions here:
+void (*builtins[])(uint) = {
+	&f_floor,
+	&f_ceil,
+};
+char * name_table[63356] = {
+	"floor",
+	"ceil",
+};
+uint name_table_pointer;
+
+void init(){
+	//printf("ASB %d\n",ARRAYSIZE(builtins));
+	name_table_pointer = ARRAYSIZE(builtins);
 	line.line = 1;
 	line.column = 0;
 	read_next = true;
 	next();
+}
+
+void init_stream(FILE * new_stream){
+	stream = new_stream;
+	init();
 }
 
 void init_string(char * string){
 	string_input = string;
-	line.line = 1;
-	line.column = 0;
-	read_next = true;
-	next();
+	init();
 }
-
-//typedef uint Word;
-
-char * name_table[63356] = {};
-uint name_table_pointer = 0;
 
 struct Token process_word(char * word){
 	//maybe it would be better if each keyword was a separate token...
@@ -98,16 +111,23 @@ struct Token process_word(char * word){
 		return (struct Token){.type = tkValue, .value = {.type = tNone}};
 	if(!strcmp(word, "or"))
 		return (struct Token){.type = tkOr};
+	if(!strcmp(word, "in"))
+		return (struct Token){.type = tkOperator_2, .operator_2 = oIn};
 	uint i;
 	//check keywords list
 	for(i=0;i<ARRAYSIZE(keywords);i++)
 		if(!strcmp(keywords[i],word))
 			return (struct Token){.type = tkKeyword, .keyword = i};
 	//check variable names list
-	for(i=0;i<name_table_pointer;i++)
-		if(!strcmp(name_table[i],word))
+	for(i=0;i<name_table_pointer;i++){
+		//printf("vn comp: %s, %s\n", name_table[i],word);
+		if(!strcmp(name_table[i],word)){
+			//printf("var name match: %s num %d\n",word,i);
 			return (struct Token){.type = tkWord, .word = i};
+		}
+	}
 	//new word
+	//printf("new var name: %s\n",word);
 	name_table[name_table_pointer] = strdup(word);
 	return (struct Token){.type = tkWord, .word = name_table_pointer++};
 }

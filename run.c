@@ -45,6 +45,12 @@ struct Value pop(){
 		die("Internal Error: Stack Underflow (in pop)\n");
 	return stack[--stack_pointer];
 }
+struct Value pop_no_lists(){
+	struct Value a = pop();
+	if(a.type == tNArgs)
+		die("Illegal List\n");
+	return a;
+}
 struct Value stack_get(int depth){
 	if(stack_pointer-depth < 0)
 		die("Internal Error: Stack Underflow (in get)\n");
@@ -202,15 +208,9 @@ int run(struct Item * new_code){
 			
 			assign_variable(variable.variable, value);
 			
-			//todo: when parsing, if = is encountered, immediately insert a "set @" token which will, when run,
-			//will set the @ pointer to the top of the stack
-			//also @ should use a stack system (where = pops from the @ stack and "set @" pushes) but later....
-			
-			if(variable.variable->constraint_expression){
-				
+			if(variable.variable->constraint_expression)
 				call(variable.variable->constraint_expression);
-				//todo: store new value somewhere accessible? (what?)
-			}
+				//todo: store new value in @
 		break;case oConstrain_End:;
 			bool valid = truthy(pop());
 			if(!valid){
@@ -226,6 +226,8 @@ int run(struct Item * new_code){
 			variable.variable->constraint_expression = item.address;
 		//End of program
 		break;case oHalt:
+			if(stack_pointer)
+				die("Internal error: Stack not empty at end of program\n");
 			goto end;
 		//Table literal
 		//Input: (<key> <value> ...) <# of values>
@@ -267,15 +269,20 @@ int run(struct Item * new_code){
 			switch(a.type){
 			case tTable:
 				push(table_lookup(a.table, b));
-				break;
-			case tArray:
+			break;case tArray:
 				if(b.type!=tNumber)
 					die("Expected number for array index, got %s.\n", type_name[a.type]);
 				if(b.number<0 || b.number >= a.array->length)
-					die("Array index out of bounds (Got %g, Expected 0 to %d)\n", b.number, a.array->length-1);
+					die("Array index out of bounds (Got %g, expected 0 to %d)\n", b.number, a.array->length-1);
 				push(a.array->pointer[(uint32_t)b.number].value);
-				break;
-			default:
+			break;case tNArgs:
+				if(b.type!=tNumber)
+					die("Expected number for list index, got %s.\n", type_name[a.type]);
+				if(b.number<0 || b.number >= a.args)
+					die("List index out of bounds (Got %g, expected 0 to %d)\n", b.number, a.args-1);
+				stack_discard(a.args);
+				push(stack_get(-(uint)b.number));
+			break;default:
 				die("Expected Array or Table; got %s.\n", type_name[a.type]);
 				// etoyr viyr rttpt zrddshrd !
 			}
@@ -314,6 +321,10 @@ int run(struct Item * new_code){
 		//Create variable scope //this is just used once at the start of the prgram
 		break;case oInit_Global:
 			level_stack[0] = push_scope(item.locals);
+			for(i=0;i<ARRAYSIZE(builtins);i++){
+				level_stack[0][i] = (struct Variable){.value = {.type = tFunction, .builtin = true, .c_function = builtins[i]}};
+			}
+			
 		//Return from function
 		break;case oReturn:
 			//todo: delete variable reference of returned value

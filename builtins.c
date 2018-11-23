@@ -34,14 +34,23 @@ void divisible_by(uint args){
 	// push((struct Value){.type = tNumber, .number = current_timestamp()-start_time});
 // }
 
-//unused
-void print(uint args){
-	uint i;
-	for(i = args; i>0; i--){
-		basic_print(stack_get(i));
-		if(i!=1)
-			printf("\t");
-	}
-	stack_discard(args);
-	printf("\n");
+
+void f_floor(uint args){
+	if(args!=1)
+		die("wrong # of args\n");
+	struct Value a = pop();
+	pop();
+	if(a.type!=tNumber)
+		die("wrong type");
+	push((struct Value){.type = tNumber, .number = floor(a.number)});
+}
+
+void f_ceil(uint args){
+	if(args!=1)
+		die("wrong # of args\n");
+	struct Value a = pop();
+	pop();
+	if(a.type!=tNumber)
+		die("wrong type");
+	push((struct Value){.type = tNumber, .number = ceil(a.number)});
 }

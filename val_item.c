@@ -123,6 +123,7 @@ enum Operator {
 	oComma,
 	oSet_At,
 	oProperty, //48
+	oIn,
 };
 
 //higher number = first
@@ -188,6 +189,7 @@ int priority[] = {
 	-2, //comma
 	0, //set_@
 	100, //property access
+	-4,//in
 };
 
 char * operator_name[] = {
