@@ -16,6 +16,8 @@ jmp_buf err_ret;
 #include "val_item.c"
 #include "token.c"
 #include "parser.c"
+#include "table.c"
+#include "garbage.c"
 #include "run.c"
 
 int main(int argc, char * argv[]){

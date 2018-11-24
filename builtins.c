@@ -54,3 +54,6 @@ void f_ceil(uint args){
 		die("wrong type");
 	push((struct Value){.type = tNumber, .number = ceil(a.number)});
 }
+
+//num:to_base(base) -> str
+//str:from_base(base) -> num

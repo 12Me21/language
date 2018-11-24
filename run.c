@@ -1,6 +1,3 @@
-struct Value stack[256];
-uint32_t stack_pointer = 0;
-
 void assign_variable(struct Variable * variable, struct Value value){
 	if(!variable)
 		die("Tried to set the value of something that isn't a variable\n");
@@ -24,10 +21,6 @@ void type_mismatch_2(struct Value arg1, struct Value arg2, enum Operator operato
 struct Item * code;
 Address call_stack[255]; //this should be bigger maybe
 uint call_stack_pointer = 0;
-
-struct Variable * scope_stack[256];
-struct Value * at_stack[256];
-uint scope_stack_pointer = 0;
 
 struct Variable * level_stack[256]; //this doesn't need to be bigger
 
@@ -74,6 +67,8 @@ void stack_discard(int amount){
 		die("Internal Error: Stack Underflow (in discard)\n");
 	stack_pointer -= amount;
 }
+//pop a value, and if it's a list, also discard the items in the list
+//which can then be accessed with `list_get(index)`
 struct Value pop_l(){
 	if(stack_pointer <= 0)
 		die("Internal Error: Stack Underflow (in pop)\n");
@@ -89,13 +84,16 @@ void make_variable(struct Variable * variable){
 	variable->value = (struct Value){.type = tNone};
 	variable->value.variable = variable;
 }
-struct Array * allocate_array(int length){
-	return ALLOC_INIT(struct Array, {.pointer = calloc(sizeof(struct Variable), length), .length = length}); //calloc so that constraint is 0 by default!
+struct Value allocate_array(int length, struct Array * * new_array){
+	*new_array = ALLOC_INIT(struct Array, {.pointer = calloc(sizeof(struct Variable), length), .length = length});//calloc so that constraint is 0 by default!
+	struct Value value = (struct Value){.type = tArray, .array = *new_array};
+	return value;
 }
 
 struct Variable * push_scope(int locals){
 	if(scope_stack_pointer >= ARRAYSIZE(scope_stack))
 		die("Scope Stack Overflow\n");
+	r_scope_length[scope_stack_pointer] = locals;
 	struct Variable * scope = scope_stack[scope_stack_pointer++] = malloc(locals * sizeof(struct Variable));
 	int i;
 	for(i=0;i<locals;i++)
@@ -189,7 +187,6 @@ void basic_print(struct Value value){
 	}
 }
 
-#include "table.c"
 #include "builtins.c"
 
 int run(struct Item * new_code){
@@ -264,21 +261,25 @@ int run(struct Item * new_code){
 			}
 			push((struct Value){.type = tTable, .table = table});
 		// Array literal
-		//Input: <values ...> <# of values>
+		//Input: <values ...> <# of values> OR <value>
 		//Output: <array>
 		break;case oArray:;
-			a = pop();
+			//printf("s %d\n", stack_pointer);
+			a = pop_l();
+			//printf("s1 %d\n", stack_pointer);
 			struct Array * array;
 			if(a.type == tNArgs){
 				//printf("making array. length=%d\n",a.args);
-				array = allocate_array(a.args);
-				for(i = a.args-1; i!=-1; i--)
-					assign_variable(&(array->pointer[i]), pop());
+				b = allocate_array(a.args, &array);
+				for(i = 0; i<a.args; i++)
+					assign_variable(&(array->pointer[i]), list_get(i));
 			}else{
-				array = allocate_array(1);
+				b = allocate_array(1, &array);
 				assign_variable(&(array->pointer[0]), a);
 			}
-			push((struct Value){.type = tArray, .array = array});
+			push(b);
+			record_alloc(&b);
+			//printf("s2 %d\n", stack_pointer);
 		// Array/Table access
 		//Input: <table> <index>
 		//Output: <value>

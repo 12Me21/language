@@ -11,7 +11,8 @@ struct Entry {
 struct Table {
 	struct Entry * first;
 	struct Entry * last;
-	//int references;
+	uint length;
+	bool checked;
 }; //table_new = {.first = NULL, .last = NULL, /*.references = 0*/};
 
 struct Entry * table_get(struct Table * table, struct Value key, bool add){
@@ -62,12 +63,23 @@ struct Entry * table_get(struct Table * table, struct Value key, bool add){
 		if(table->last){
 			table->last->next = current;
 			table->last = current;
+			table->length++;
 		}else{ //first item added to the table
 			table->first = table->last = current;
+			table->length = 1;
 		}
 		return current;
 	}
 	return NULL;
+}
+
+void free_table(struct Table * table){
+	struct Entry * current = table->first;
+	while(current){
+		struct Entry * next = current->next;
+		free(current);
+		current=next;
+	}
 }
 
 unsigned int table_length(struct Table * table){

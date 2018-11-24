@@ -19,7 +19,7 @@ char * type_name[] = { "None", "Number", "String", "Table", "Array", "Function",
 struct String {
 	char * pointer;
 	uint32_t length;
-	//int references;
+	bool checked;
 };
 
 struct Variable;
@@ -27,6 +27,7 @@ struct Variable;
 struct Array {
 	struct Variable * pointer;
 	uint32_t length;
+	bool checked;
 };
 
 // A value or variable
@@ -39,6 +40,7 @@ struct Value {
 		struct String * string;
 		struct Table * table;
 		struct Array * array;
+		void * pointer; //
 		struct {
 			union {
 				Address user_function;
@@ -355,7 +357,8 @@ bool equal(struct Value a, struct Value b){
 			return true;
 			//return a.array == b.array;
 		case tTable:
-			return a.table == b.table;
+			//return a.table == b.table;
+			die("not supported");
 		case tString:
 			return
 				a.string->length == b.string->length && 
@@ -417,3 +420,10 @@ int compare_vars(struct Variable a, struct Variable b){
 	return compare(a.value, b.value);
 }
 
+struct Value stack[256];
+uint32_t stack_pointer = 0;
+
+struct Variable * scope_stack[256];
+struct Value * at_stack[256]; //this shares the scope stack pointer but maybe it should use callstack instead?
+uint scope_stack_pointer = 0;
+uint r_scope_length[ARRAYSIZE(scope_stack)];
