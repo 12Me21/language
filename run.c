@@ -259,7 +259,9 @@ int run(struct Item * new_code){
 					die("unsupported list operation (coming soon)\n");
 				table_declare(table, key, value);
 			}
-			push((struct Value){.type = tTable, .table = table});
+			a = (struct Value){.type = tTable, .table = table};
+			push(a);
+			record_alloc(&a);
 		// Array literal
 		//Input: <values ...> <# of values> OR <value>
 		//Output: <array>
@@ -343,9 +345,9 @@ int run(struct Item * new_code){
 		//Create variable scope //this is just used once at the start of the prgram
 		break;case oInit_Global:
 			level_stack[0] = push_scope(item.locals);
-			for(i=0;i<ARRAYSIZE(builtins);i++){
-				level_stack[0][i] = (struct Variable){.value = {.type = tFunction, .builtin = true, .c_function = builtins[i]}};
-			}
+			for(i=0;i<ARRAYSIZE(builtins);i++)
+				level_stack[0][i] = builtins[i];
+				//(struct Variable){.value = {.type = tFunction, .builtin = true, .c_function = builtins[i]}};
 			
 		//Return from function
 		break;case oReturn:

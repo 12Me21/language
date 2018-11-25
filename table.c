@@ -8,6 +8,8 @@ struct Entry {
 	struct Entry * next;
 };
 
+//rather than storing first and last, just store first, and insert new elements at the start of the linked list
+//this would break support for iteration though ...
 struct Table {
 	struct Entry * first;
 	struct Entry * last;
@@ -80,6 +82,7 @@ void free_table(struct Table * table){
 		free(current);
 		current=next;
 	}
+	free(table);
 }
 
 unsigned int table_length(struct Table * table){

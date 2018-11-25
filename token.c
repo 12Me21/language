@@ -70,15 +70,28 @@ void next(){
 
 #include "builtins.h"
 
-//put builtin functions here:
-void (*builtins[])(uint) = {
-	&f_floor,
-	&f_ceil,
+//put builtin variables here
+struct Variable builtins[] = {
+	//{.value = {.type = tTable, .table = &f_floor}, .constraint_expression = -1},
+	{.value = {.type = tFunction, .builtin = true, .c_function = &f_floor}, .constraint_expression = -1},
+	{.value = {.type = tFunction, .builtin = true, .c_function = &f_ceil}, .constraint_expression = -1},
+	{.value = {.type = tNumber, .number = M_PI}, .constraint_expression = -1},
 };
+//should pi be a global variable?
+//sure it might seem better to put it inside Math or Number, but think about it
+//when are you going to use a variable called `pi` which doesn't have a value of 3.14159...?
+//same with floor, ceil, etc.
+//...
+//maybe builtins should insert their value directly during parsing...
+//to make precomputing easier?
 char * name_table[63356] = {
+	//"Number",
 	"floor",
 	"ceil",
+	"pi",
+	//"random", //random between 2 values. also add random_choice or something that picks from an array/list/table/whatever
 };
+//if lists could be evaluated lazily somehow... that would be pretty cool.
 uint name_table_pointer;
 
 void init(){
@@ -324,3 +337,41 @@ struct Token next_token(){
 			parse_error("Invalid character");
 	}
 }
+
+
+// tNone,
+// tNumber,
+// tString,
+// tTable,
+// tArray,
+// tFunction,
+// tBoolean,
+// tNArgs,
+
+void (*methods[][8])(uint) = {
+	//length
+	{
+		NULL,
+		NULL,
+		&f_string_length,
+		&f_table_length,
+		&f_array_length,
+		NULL,
+		NULL,
+		&f_list_length,
+	},
+	
+	
+};
+
+// : operator
+//value:builtin_type_function(...)
+//builtin_type_function is the index into the list of all builtin type method names
+//so maybe `length` is index 4
+//and each type specifies a function (optional) to run for each index
+
+
+//instead of this dumb thing,
+//just compile :word into an operator
+//which checks the type and does the proper operation
+//uh except shit there's no way to 

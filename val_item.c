@@ -57,6 +57,10 @@ struct Value {
 struct Variable {
 	struct Value value;
 	Address constraint_expression;
+	//special constraint values:
+	//0 = no constraint
+	//-1 (max int) = constant
+	//maybe add constant option for optimization?
 };
 
 // every distinct operator

@@ -57,3 +57,11 @@ void f_ceil(uint args){
 
 //num:to_base(base) -> str
 //str:from_base(base) -> num
+
+void f_string_length(uint args){
+	if(args!=1)
+		die("wrong # of args\n");
+	struct Value a = pop_type(tString);
+	pop();
+	push((struct Value){.type = tNumber, .number = (double)a.string->length});
+}

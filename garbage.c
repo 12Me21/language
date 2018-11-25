@@ -15,7 +15,7 @@ struct Heap_Object {
 };
 
 uint used_memory = 0;
-struct Heap_Object heap_objects[10];
+struct Heap_Object heap_objects[65536];
 
 //add a flag to array/string/table keeping track of whether it's been checked or not
 
@@ -61,6 +61,7 @@ void garbage_collect(){
 			if(!heap_objects[i].array->checked){
 				used_memory -= heap_objects[i].array->length * sizeof(struct Variable);
 				free(heap_objects[i].array->pointer);
+				free(heap_objects[i].array);
 				heap_objects[i].type = tNone;
 			}else
 				heap_objects[i].array->checked = false;
@@ -75,12 +76,14 @@ void garbage_collect(){
 			if(!heap_objects[i].string->checked){
 				used_memory -= heap_objects[i].string->length * sizeof(char);
 				free(heap_objects[i].string->pointer);
+				free(heap_objects[i].string);
 				heap_objects[i].type = tNone;
 			}else
 				heap_objects[i].string->checked = false;
 		}
 }
 
+//just make a custom *alloc function which checks if there's enough memory free and adjusts FREEMEM
 size_t memory_usage(struct Value * value){
 	switch(value->type){
 	case tArray:
@@ -95,6 +98,7 @@ size_t memory_usage(struct Value * value){
 
 void record_alloc(struct Value * value){
 	used_memory += memory_usage(value);
+	printf("mem: %d\n",used_memory);
 	uint i;
 	for(i=0;i<ARRAYSIZE(heap_objects);i++)
 		if(heap_objects[i].type == tNone){
@@ -116,3 +120,5 @@ void record_alloc(struct Value * value){
 	die("Out of space\n");
 	success:;
 }
+
+//consider: https://en.wikipedia.org/wiki/Tracing_garbage_collection#Moving_vs._non-moving

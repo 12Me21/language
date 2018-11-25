@@ -531,3 +531,7 @@ struct Item * parse(FILE * stream, char * string){
 //:(
 
 //syntax for constraints in arrays?
+
+//need to keep track of variable names somehow, for error messages/debugging
+//after an error, allow inputting variable names to check value
+//or write a full REPL idk
