@@ -212,6 +212,26 @@ struct Token next_token(){
 			while(c != '"'){
 				if(c == EOF)
 					parse_error("Unclosed string");
+				if(c == '\\'){
+					next();
+					switch(c){
+					case '\\':case '"':
+					break;case 'n':
+						c='\n';
+					break;case 'r':
+						c='\r';
+					break;case 'f':
+						c='\f';
+					break;case '0':
+						c='\0'; //just allow numbers eventually
+					break;case 'b':
+						c='\b';
+					break;case 'a':
+						c='\a';
+					break;default:
+						parse_error("invalid escape sequence\n");
+					}
+				}
 				string_temp[length++] = c;
 				next();
 			}

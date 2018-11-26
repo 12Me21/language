@@ -424,6 +424,62 @@ int compare_vars(struct Variable a, struct Variable b){
 	return compare(a.value, b.value);
 }
 
+char to_string_output[256];
+
+uint to_string(struct Value value, char * output){
+	switch(value.type){
+	case tString:
+		memcpy(output, value.string->pointer, value.string->length);
+		return value.string->length;
+	case tBoolean:
+		if(value.boolean){
+			memcpy(output, "true", 4);
+			return 4;
+		}
+		memcpy(output, "false", 5);
+		return 5;
+	case tNone:
+		memcpy(output, "None", 4);
+		return 4;
+	case tFunction:
+		memcpy(output, "(function)", 10);
+		return 10;
+	case tTable:
+		memcpy(output, "(table)", 7);
+		return 7;
+	case tArray:;
+		char * start = output;
+		*(output++) = '[';
+		uint i;
+		for(i=0;i<value.array->length;i++){
+			if(i)
+				*(output++) = ',';
+			output += to_string(value.array->pointer[i].value, output);
+		}
+		*(output++) = ']';
+		return (output - start);
+	case tNumber:
+		//NaN
+		if(isnan(value.number)){
+			memcpy(output, "NaN", 3);
+			return 3;
+		}
+		//+-Infinity
+		if(isinf(value.number)){
+			if(value.number>0){
+				memcpy(output, "Infinity", 8);
+				return 8;
+			}
+			memcpy(output, "-Infinity", 9);
+			return 9;
+		}
+		//should never use scientific notation:
+		return sprintf(output, "%.*g", value.number == nearbyintf(value.number) ? 99999 : 15, value.number);
+	default:
+		die("tried to convert some dumb shit into a string\n");
+	}
+}
+
 struct Value stack[256];
 uint32_t stack_pointer = 0;
 

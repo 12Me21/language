@@ -89,8 +89,6 @@ void f_array_fill(uint args){
 }
 
 
-
-
 //what if none was replaced with an empty list?
 //hmm
 //but then it couldn't be inside another list (well it could.... but it would be weird...)

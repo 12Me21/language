@@ -26,9 +26,28 @@ break;case oNegative:
 	a = pop_type(tNumber);
 	push((struct Value){.type = tNumber, .number = -a.number});
 break;case oAdd:;
-	b = pop_type(tNumber);
-	a = pop_type(tNumber);
-	push((struct Value){.type = tNumber, .number = a.number + b.number});
+	b = pop_l();
+	a = pop_l();
+	if(a.type == tNumber){
+		if(b.type != tNumber)
+			die("expect number\n");
+		push((struct Value){.type = tNumber, .number = a.number + b.number});
+	}else if (a.type == tString){
+		uint length = to_string(b, to_string_output);
+		uint a_length = a.string->length;
+		char * new_string = malloc((a_length + length) * sizeof(char));
+		memcpy(new_string, a.string->pointer, a_length);
+		memcpy(new_string + a_length, to_string_output, length);
+		a = (struct Value){.type = tString, .string =
+			ALLOC_INIT(struct String, {.pointer = new_string, .length = a_length + length})
+		};
+		if(!a.string)
+			die("memory error\n");
+		record_alloc(&a);
+		push(a);
+	}else{
+		die("bad types xd\n");
+	}
 break;case oSubtract:
 	b = pop_type(tNumber);
 	a = pop_type(tNumber);
