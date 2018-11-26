@@ -1,5 +1,6 @@
-void f_floor(uint args);
-void f_ceil(uint args);
+// void f_floor(uint args);
+// void f_ceil(uint args);
+void f_array_fill(uint args);
 //array:count()
 //list:count()
 //string:count()

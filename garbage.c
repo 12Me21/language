@@ -98,7 +98,7 @@ size_t memory_usage(struct Value * value){
 
 void record_alloc(struct Value * value){
 	used_memory += memory_usage(value);
-	printf("mem: %d\n",used_memory);
+	//printf("mem: %d\n",used_memory);
 	uint i;
 	for(i=0;i<ARRAYSIZE(heap_objects);i++)
 		if(heap_objects[i].type == tNone){

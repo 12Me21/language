@@ -79,6 +79,7 @@ void free_table(struct Table * table){
 	struct Entry * current = table->first;
 	while(current){
 		struct Entry * next = current->next;
+		free(current->key);
 		free(current);
 		current=next;
 	}

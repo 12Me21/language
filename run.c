@@ -60,7 +60,14 @@ struct Value pop_type(enum Type type){
 		die("Wrong type\n");
 	return a;
 }
-
+void replace(struct Value * value){
+	stack[stack_pointer-1] = *value;
+}
+struct Value arg_get(uint index){
+	if(stack_pointer+1+index >= ARRAYSIZE(stack))
+		die("Internal Error: Stack Overflow (in get)\n");
+	return stack[stack_pointer+1+index];
+}
 
 void stack_discard(int amount){
 	if(stack_pointer-amount < 0)
@@ -71,12 +78,21 @@ void stack_discard(int amount){
 //which can then be accessed with `list_get(index)`
 struct Value pop_l(){
 	if(stack_pointer <= 0)
-		die("Internal Error: Stack Underflow (in pop)\n");
+		die("Internal Error: Stack Underflow (in pop_l)\n");
 	struct Value a = stack[--stack_pointer];
 	if(a.type==tNArgs)
 		stack_discard(a.args);
 	return a;
 }
+// struct Value * pop_l(){
+	// if(stack_pointer <= 0)
+		// die("Internal Error: Stack Underflow (in pop)\n");
+	// struct Value * sp = stack + --stack_pointer;
+	// if(sp->type==tNArgs)
+		// stack_discard(sp->args);
+	// return sp;
+// }
+
 
 //calling and scope functions
 void make_variable(struct Variable * variable){
@@ -130,12 +146,10 @@ void call_user_function(Address address, uint inputs){
 	//assign values to input variables
 	uint i;
 	if(inputs <= code[address].args) //right number of arguments, or fewer
-		for(i=inputs-1;i!=-1;i--)
-			assign_variable(&scope[i], pop());
+		for(i=0;i<inputs;i++)
+			assign_variable(scope+i, arg_get(i));
 	else //too many args
 		die("That's too many!\n");
-	//jump
-	pop(); //remove function itself
 }
 void ret(){
 	//todo: delete variable reference of returned value
@@ -226,7 +240,7 @@ int run(struct Item * new_code){
 			
 			assign_variable(variable.variable, value);
 			
-			if(variable.variable->constraint_expression)
+			if(variable.variable->constraint_expression && variable.variable->constraint_expression!=-1)
 				call(variable.variable->constraint_expression);
 				//todo: store new value in @
 		break;case oConstrain_End:;
@@ -316,23 +330,18 @@ int run(struct Item * new_code){
 		//Output (user): 
 		//Output (user, after return): <return value>
 		break;case oCall:
-			a = pop();
+			a = pop_l();
 			uint args;
 			if(a.type == tNArgs)
 				args = a.args;
-			else{
+			else
 				args = 1;
-				push(a);//optimize
-			}
-			
-			a = stack_get(args+1); //get "function" value
+			a = pop(); //get function
 			if(a.type != tFunction)
 				die("Tried to call a %s as a function\n", type_name[a.type]);
-			if(a.builtin)
-				//c functions should pop the inputs + 1 extra item from the stack.
-				//and push the return value.
+			if(a.builtin){
 				(*(a.c_function))(args);
-			else
+			}else
 				call_user_function(a.user_function, args);
 		//Discard value from stack
 		//Input: <values ...>
