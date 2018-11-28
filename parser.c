@@ -65,16 +65,82 @@ uint * p_level_stack[256]; //256 = # of levels
 uint scope_length = 0;
 uint locals_length[256]; //256 = # of local variables per scope
 
+//to find variable name from Variable:
+//1: get pointer to variable
+//2: search for pointer in scope stack
+//3: search level stack for that entry in the scope stack
+//(now you have the index and level
+//(if that wasn't found, that means the variable is in an array or table or something...)
+//4: use the call stack to find the address of the function which that variable is from (this is assuming the call stack and scope stack are aligned, which they are because the language uses function scoped variables)
+//5: now you have the function address and var index
+//6: during parsing, whenever entering a scope, push the function address to an array, along with the names of all that function's local variables
+//7: now, search for the address in that list, and look up the index in the list of vars
+//8: now you have the variable name ID which you can look up using the name table!
+
+//find Variable address from name:
+//1: look up name in name table
+//3: each scope (function) has a list of the names of all its local variables (generated during parsing)
+//4: using the level/call stacks, search for the name
+// - look at the top item in the level stack
+// - use that to look up the right call stack entry
+// - use the call stack entry to get the function address
+// - look up the address in function_addresses
+// - look for the name id in the corresponding function_locals list
+// - repeat for each item in the level stack.
+
+// void 
+
+Address function_addresses[65536];
+uint * function_locals[65536];
+uint function_addresses_length = 0;
+
+char * variable_pointer_to_name(struct Variable * variable){
+	//printf("AAAAAAAA\n");
+	uint i;
+	//printf("- %p\n",variable);
+	for(i=scope_stack_pointer-1;i!=-1;i--){
+		uint j;
+		
+		for(j=0;j<r_scope_length[i];j++){
+			//printf("scope %i: %p\n",i,&scope_stack[i][j]);
+			if(&scope_stack[i][j] == variable){
+				Address address = i ? call_stack[i-1] : 0;
+				//printf("- %d\n",address);
+				for(i=0;i<function_addresses_length;i++){
+					//printf("%d\n",function_addresses[i]);
+					if(function_addresses[i]==address){
+						//printf("OK %d",function_locals[i][j]);
+						return name_table[function_locals[i][j]];
+					}
+				}
+				die("Internal error: failed to get variable name");
+			}
+		}
+	}
+	return "<unknown variable>";
+	die("failed 1\n");
+	
+	
+	// uint i;
+	// for(i=0;i<ARRAYSIZE(function_addresses);i++)
+		// if(function_addresses[i] == address)
+			// return function_locals[i][index];
+	// die("Internal error: failure when looking up variable name");
+}
+
 void p_push_scope(){
 	if(scope_length >= ARRAYSIZE(p_level_stack))
 		parse_error("Level stack overflow. (Too many nested functions)\n");
 	p_level_stack[scope_length] = malloc(256 * sizeof(uint));
 	locals_length[scope_length++] = 0;
 }
-void discard_scope(){
+
+void discard_scope(uint start_pos){
 	if(scope_length <= 0)
 		parse_error("Internal Error: Scope Stack Underflow\n");
-	free(p_level_stack[--scope_length]);
+	--scope_length;
+	function_addresses[function_addresses_length] = start_pos;
+	function_locals[function_addresses_length++] = realloc(p_level_stack[scope_length], locals_length[scope_length] * sizeof(uint));
 }
 
 // char * property_names[65536];
@@ -253,7 +319,7 @@ bool read_expression(bool allow_comma){
 			output((struct Item){.operator = oReturn_None});
 			start->address = output_length;
 			function_info->locals = locals_length[scope_length-1];
-			discard_scope();
+			discard_scope(start_pos);
 			output((struct Item){.operator = oConstant, .value = {.type = tFunction, .builtin = false, .user_function = start_pos}});
 		}else{
 			return read_next = false;
@@ -499,6 +565,7 @@ struct Item * parse(FILE * stream, char * string){
 	
 	output((struct Item){.operator = oHalt});
 	output_stack[0].locals = locals_length[0];
+	discard_scope(0);
 	return output_stack;
 }
 

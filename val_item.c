@@ -487,3 +487,8 @@ struct Variable * scope_stack[256];
 struct Value * at_stack[256]; //this shares the scope stack pointer but maybe it should use callstack instead?
 uint scope_stack_pointer = 0;
 uint r_scope_length[ARRAYSIZE(scope_stack)];
+
+Address call_stack[255]; //this should be bigger maybe
+uint call_stack_pointer = 0;
+
+struct Variable * level_stack[256]; //this doesn't need to be bigger

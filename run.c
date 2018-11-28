@@ -19,10 +19,6 @@ void type_mismatch_2(struct Value arg1, struct Value arg2, enum Operator operato
 }
 
 struct Item * code;
-Address call_stack[255]; //this should be bigger maybe
-uint call_stack_pointer = 0;
-
-struct Variable * level_stack[256]; //this doesn't need to be bigger
 
 Address pos = 0;
 struct Item item;
@@ -240,17 +236,20 @@ int run(struct Item * new_code){
 			
 			assign_variable(variable.variable, value);
 			
-			if(variable.variable->constraint_expression && variable.variable->constraint_expression!=-1)
+			if(variable.variable->constraint_expression && variable.variable->constraint_expression!=-1){
+				push(variable);
+				push_scope(0);
 				call(variable.variable->constraint_expression);
+			}
 				//todo: store new value in @
 		break;case oConstrain_End:;
 			bool valid = truthy(pop());
 			if(!valid){
-				printf("Validation failed:\n");
-				printf(" Variable: <idk>\n");
-				printf(" Value: ");
+				printf("Can't set `%s` to `", variable_pointer_to_name(pop().variable));
 				basic_print(value);
-				die("\n");
+				die("`\n");
+			}else{
+				pop();
 			}
 			ret();
 		break;case oConstrain:
@@ -354,8 +353,10 @@ int run(struct Item * new_code){
 		//Create variable scope //this is just used once at the start of the prgram
 		break;case oInit_Global:
 			level_stack[0] = push_scope(item.locals);
-			for(i=0;i<ARRAYSIZE(builtins);i++)
+			for(i=0;i<ARRAYSIZE(builtins);i++){
 				level_stack[0][i] = builtins[i];
+				level_stack[0][i].value.variable = &level_stack[0][i];
+			}
 				//(struct Variable){.value = {.type = tFunction, .builtin = true, .c_function = builtins[i]}};
 			
 		//Return from function

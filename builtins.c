@@ -20,13 +20,6 @@
 
 char arg_types[256];
 
-//idea: 64 bit number (or something) w/ 3 bits per argument
-//as some sort of "signiture"
-//as well as the number of args
-//so if you're expecting array, number, number, that would be 0b(number)(number)(array), 3
-//there are 8 types, but one of them (arglist) can't be used as an argument, so that value can be reserved for "any type"
-//
-
 void print_args(){
 	printf("( ");
 	uint i = 1;
@@ -45,7 +38,7 @@ void print_args(){
 void get_arg(uint index, struct Value * value, uint allowed_types) {
 	*value = list_get(index);
 	if(!(1<<value->type & allowed_types)){
-		printf("Wrong type passed to function.\n"); //get function name SOMEHOW
+		printf("Wrong type passed to function %s.\n", variable_pointer_to_name(list_get(0).variable)); //get function name SOMEHOW
 		printf("Arguments: ");
 		print_args();
 		printf("\nArgument %d was expected to be: ", index);
