@@ -1756,7 +1756,7 @@ var ASM_CONSTS = [];
 
 STATIC_BASE = GLOBAL_BASE;
 
-STATICTOP = STATIC_BASE + 546304;
+STATICTOP = STATIC_BASE + 1596896;
 /* global initializers */  __ATINIT__.push();
 
 
@@ -1765,7 +1765,7 @@ STATICTOP = STATIC_BASE + 546304;
 
 
 
-var STATIC_BUMP = 546304;
+var STATIC_BUMP = 1596896;
 Module["STATIC_BASE"] = STATIC_BASE;
 Module["STATIC_BUMP"] = STATIC_BUMP;
 
@@ -5168,9 +5168,9 @@ function nullFunc_iiii(x) { err("Invalid function pointer called with signature 
 
 function nullFunc_vi(x) { err("Invalid function pointer called with signature 'vi'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");  err("Build with ASSERTIONS=2 for more info.");abort(x) }
 
-Module['wasmTableSize'] = 41;
+Module['wasmTableSize'] = 50;
 
-Module['wasmMaxTableSize'] = 41;
+Module['wasmMaxTableSize'] = 50;
 
 function invoke_ii(index,a1) {
   var sp = stackSave();
