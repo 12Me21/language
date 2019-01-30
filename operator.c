@@ -144,7 +144,7 @@ break;case oIn:
 		if(b.type!=tString)
 			die("expected string\n");
 		for(i=0;i<a.string->length - b.string->length;i++)
-			if(!memcmp(a.string->pointer, b.string->pointer, b.string->length * sizeof(char))){
+			if(!memcmp(a.string->pointer+i, b.string->pointer, b.string->length * sizeof(char))){
 				push((struct Value){.type = tNumber, .number = (double)i});
 				goto found_in;
 			}
