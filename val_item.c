@@ -251,6 +251,9 @@ enum Token_Type {
 	tkLine_Break,
 	tkAssign,
 	tkOr,
+	//errors:
+	tkUnclosedString,
+	tkInvalidChar,
 };
 
 char * token_name[] = {
@@ -274,6 +277,14 @@ char * token_name[] = {
 	"@",
 	"(Line break)",
 	"=",
+	"or",
+	"(Unclosed string)",
+	"(Invalid character)",
+};
+
+struct Line {
+	uint line;
+	uint column;
 };
 
 struct Token {
@@ -287,6 +298,7 @@ struct Token {
 		int keyword;
 		int word;
 	};
+	struct Line position_in_file;
 };
 
 enum Keyword { //reference to keywords list

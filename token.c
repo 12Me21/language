@@ -1,50 +1,11 @@
-uint output_length = 0;
-
-struct Line {
-	uint line;
-	uint column;
-};
-
-bool is_digit(char c){
-	return c>='0' && c<='9';
-}
-
-bool is_alpha(char c){
-	return (c>='A' && c<='Z') || (c>='a' && c<='z');
-}
+// input: stream or string
+// output: tokens
 
 bool read_next;
 int c;
 FILE * stream;
-char string_temp[1000];
-struct Line line;
-struct Line real_line;
-
-void parse_error_1(){
-	printf("Error while parsing line %d, character %d\n ", real_line.line, real_line.column);
-}
-
-void parse_error_2(){
-	longjmp(err_ret, 1);
-}
-
-#define parse_error(...) (parse_error_1(), printf(__VA_ARGS__), parse_error_2())
-
-void unexpected_end(char * got, char * expected, char * start, struct Line start_line){
-	parse_error("Encountered `%s` while expecting `%s` (to end `%s` on line %d char %d)\n", got, expected, start, start_line.line, start_line.column);
-}
-
-Address line_position_in_output[65536];
-
-uint get_line(Address address){
-	uint i;
-	for(i=0;i<ARRAYSIZE(line_position_in_output);i++)
-		if(line_position_in_output[i]>address)
-			break;
-	return i-1;
-}
-
 char * string_input = NULL;
+struct Line line;
 
 //next character
 void next(){
@@ -53,7 +14,6 @@ void next(){
 		if(c=='\n'){
 			line.column = 1;
 			line.line++;
-			line_position_in_output[line.line] = output_length;
 		}
 		if(string_input){
 			c = *string_input++;
@@ -115,50 +75,76 @@ void init_string(char * string){
 	init();
 }
 
-struct Token process_word(char * word){
+void process_word(char * word, struct Token * token){
 	//maybe it would be better if each keyword was a separate token...
 	//check special reserved words:
-	if(!strcmp(word, "true"))
-		return (struct Token){.type = tkValue, .value = {.type = tBoolean, .boolean = true}};
-	if(!strcmp(word, "false"))
-		return (struct Token){.type = tkValue, .value = {.type = tBoolean, .boolean = false}};
-	if(!strcmp(word, "none"))
-		return (struct Token){.type = tkValue, .value = {.type = tNone}};
-	if(!strcmp(word, "or"))
-		return (struct Token){.type = tkOr};
-	if(!strcmp(word, "in"))
-		return (struct Token){.type = tkOperator_2, .operator_2 = oIn};
-	uint i;
-	//check keywords list
-	for(i=0;i<ARRAYSIZE(keywords);i++)
-		if(!strcmp(keywords[i],word))
-			return (struct Token){.type = tkKeyword, .keyword = i};
-	//check variable names list
-	for(i=0;i<name_table_pointer;i++){
-		//printf("vn comp: %s, %s\n", name_table[i],word);
-		if(!strcmp(name_table[i],word)){
-			//printf("var name match: %s num %d\n",word,i);
-			return (struct Token){.type = tkWord, .word = i};
+	if(!strcmp(word, "true")){
+		token->type = tkValue;
+		token->value = (struct Value){.type = tBoolean, .boolean = true};
+	}else if(!strcmp(word, "false")){
+		token->type = tkValue;
+		token->value = (struct Value){.type = tBoolean, .boolean = false};
+	}else if(!strcmp(word, "none")){
+		token->type = tkValue;
+		token->value = (struct Value){.type = tNone};
+	}else if(!strcmp(word, "or")){
+		token->type = tkOr;
+	}else if(!strcmp(word, "in")){
+		token->type = tkOperator_2;
+		token->operator_2 = oIn;
+	}else{
+		uint i;
+		//check keywords list
+		for(i=0;i<ARRAYSIZE(keywords);i++)
+			if(!strcmp(keywords[i],word)){
+				token->type = tkKeyword;
+				token->keyword = i;
+				goto ret;
+			}
+		//check variable names list
+		for(i=0;i<name_table_pointer;i++){
+			//printf("vn comp: %s, %s\n", name_table[i],word);
+			if(!strcmp(name_table[i],word)){
+				//printf("var name match: %s num %d\n",word,i);
+				token->type = tkWord;
+				token->word = i;
+				goto ret;
+			}
 		}
+		//new word
+		//printf("new var name: %s\n",word);
+		name_table[name_table_pointer] = strdup(word);
+		token->type = tkWord;
+		token->word = name_table_pointer++;
 	}
-	//new word
-	//printf("new var name: %s\n",word);
-	name_table[name_table_pointer] = strdup(word);
-	return (struct Token){.type = tkWord, .word = name_table_pointer++};
+	ret:;
 }
+
+char string_temp[1000];
+
+bool is_digit(char c){
+	return c>='0' && c<='9';
+}
+
+bool is_alpha(char c){
+	return (c>='A' && c<='Z') || (c>='a' && c<='z');
+}
+
+struct Line real_line;
 
 struct Token next_token(){
 	while(c == ' ' || c == '\t')
 		next();
 	
 	real_line = line;
+	struct Token ret = {.position_in_file = real_line};
 	
 	switch(c){
 		case EOF:
-			line_position_in_output[line.line+1] = (uint)-1;
-			return (struct Token){.type = tkEof};
+			//line_position_in_output[line.line+1] = (uint)-1;
+			ret.type = tkEof;
 		// Number
-		case '0':
+		break;case '0':
 		case '1':
 		case '2':
 		case '3':
@@ -190,9 +176,10 @@ struct Token next_token(){
 				}else
 					read_next = false;
 			}
-			return (struct Token){.type = tkValue, .value = {.type = tNumber, .number = number}};
+			ret.type = tkValue;
+			ret.value = (struct Value){.type = tNumber, .number = number};
 		// . operator or number starting with .
-		case '.':
+		break;case '.':
 			next();
 			if(is_digit(c)){
 				double number= c - '0';
@@ -202,17 +189,20 @@ struct Token next_token(){
 					number += c - '0';
 					next();
 				}
-				return (struct Token){.type = tkValue, .value = {.type = tNumber, .number = number}};
+				ret.type = tkValue;
+				ret.value = (struct Value){.type = tNumber, .number = number};
+			}else{
+				ret.type = tkDot;
 			}
-			return (struct Token){.type = tkDot};
 		// String
-		case '"':
+		break;case '"':
 			next();
 			int length=0;
 			while(c != '"'){
-				if(c == EOF)
-					parse_error("Unclosed string");
-				if(c == '\\'){
+				if(c == EOF){
+					ret.type = tkUnclosedString;
+					goto exit;
+				}else if(c == '\\'){
 					next();
 					switch(c){
 					case '\\':case '"':
@@ -228,8 +218,8 @@ struct Token next_token(){
 						c='\b';
 					break;case 'a':
 						c='\a';
-					break;default:
-						parse_error("invalid escape sequence\n");
+					break;default:;
+						//none
 					}
 				}
 				string_temp[length++] = c;
@@ -237,116 +227,144 @@ struct Token next_token(){
 			}
 			//next(); //IDK why I need[ed] 2 nexts here
 			next();
-			return (struct Token){.type = tkValue, .value = {.type = tString, .string = 
+			ret.type = tkValue;
+			ret.value = (struct Value){.type = tString, .string = 
 				ALLOC_INIT(struct String, {.pointer = memdup(string_temp, length * sizeof(char)), .length = length})
-			}};
-		case '~':
+			};
+		break;case '~':
 			next();
-			return (struct Token){.type = tkOperator_12, .operator_1 = oBitwise_Not, .operator_2 = oBitwise_Xor};
-		case '!':
-			next();
-			if(c=='='){
-				next();
-				return (struct Token){.type = tkOperator_2, .operator_2 = oNot_Equal};
-			}
-			return (struct Token){.type = tkOperator_1, .operator_1 = oNot};
-		case '%':
-			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oMod};
-		case '^':
-			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oExponent};
-		case '&':
-			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oBitwise_And};
-		case '*':
-			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oMultiply};
-		case '(':
-			next();
-			return (struct Token){.type = tkLeft_Paren};
-		case ')':
-			next();
-			return (struct Token){.type = tkRight_Paren};
-		case '-':
-			next();
-			return (struct Token){.type = tkOperator_12, .operator_1 = oNegative, .operator_2 = oSubtract};
-		case '+':
-			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oAdd};
-		case '?':
-			next();
-			return (struct Token){.type = tkOperator_1, .operator_1 = oPrint};
-		case '=':
+			ret.type = tkOperator_12;
+			ret.operator_1 = oBitwise_Not;
+			ret.operator_2 = oBitwise_Xor;
+		break;case '!':
 			next();
 			if(c=='='){
 				next();
-				return (struct Token){.type = tkOperator_2, .operator_2 = oEqual};
+				ret.type=tkOperator_2;
+				ret.operator_2 = oNot_Equal;
+			}else{
+				ret.type = tkOperator_1;
+				ret.operator_1 = oNot;
 			}
-			return (struct Token){.type = tkAssign};
-		case '[':
+		break;case '%':
 			next();
-			return (struct Token){.type = tkLeft_Bracket};
-		case ']':
+			ret.type = tkOperator_2;
+			ret.operator_2 = oMod;
+		break;case '^':
 			next();
-			return (struct Token){.type = tkRight_Bracket};
-		case '{':
+			ret.type = tkOperator_2;
+			ret.operator_2 = oExponent;
+		break;case '&':
 			next();
-			return (struct Token){.type = tkLeft_Brace};
-		case '}':
+			ret.type = tkOperator_2;
+			ret.operator_2 = oBitwise_And;
+		break;case '*':
 			next();
-			return (struct Token){.type = tkRight_Brace};
-		case '|':
+			ret.type = tkOperator_2;
+			ret.operator_2 = oMultiply;
+		break;case '(':
 			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oBitwise_Or};
-		case '\\':
+			ret.type = tkLeft_Paren;
+		break;case ')':
 			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oFloor_Divide};
-		case ';':
+			ret.type = tkRight_Paren;
+		break;case '-':
 			next();
-			return (struct Token){.type = tkSemicolon};
-		case '\n':
+			ret.type = tkOperator_12;
+			ret.operator_1 = oNegative;
+			ret.operator_2 = oSubtract;
+		break;case '+':
 			next();
-			return (struct Token){.type = tkLine_Break};
-		case ':':
+			ret.type = tkOperator_2;
+			ret.operator_2 = oAdd;
+		break;case '?':
 			next();
-			return (struct Token){.type = tkColon};
-		case '@':
+			ret.type = tkOperator_1;
+			ret.operator_1 = oPrint;
+		break;case '=':
 			next();
-			return (struct Token){.type = tkAt};
+			if(c=='='){
+				next();
+				ret.type = tkOperator_2;
+				ret.operator_2 = oEqual;
+			}else{
+				ret.type = tkAssign;
+			}
+		break;case '[':
+			next();
+			ret.type = tkLeft_Bracket;
+		break;case ']':
+			next();
+			ret.type = tkRight_Bracket;
+		break;case '{':
+			next();
+			ret.type = tkLeft_Brace;
+		break;case '}':
+			next();
+			ret.type = tkRight_Brace;
+		break;case '|':
+			next();
+			ret.type = tkOperator_2;
+			ret.operator_2 = oBitwise_Or;
+		break;case '\\':
+			next();
+			ret.type = tkOperator_2;
+			ret.operator_2 = oFloor_Divide;
+		break;case ';':
+			next();
+			ret.type = tkSemicolon;
+		break;case '\n':
+			next();
+			ret.type = tkLine_Break;
+		break;case ':':
+			next();
+			ret.type = tkColon;
+		break;case '@':
+			next();
+			ret.type = tkAt;
 		// Comment
-		case '\'':
-			do{
+		break;case '\'':
+			do {
 				next();
-			}while(c!='\n' && c!=EOF);
-			return next_token();
-		case '<':
+			} while(c!='\n' && c!=EOF);
+			ret = next_token();
+		break;case '<':
 			next();
 			if(c=='='){
 				next();
-				return (struct Token){.type = tkOperator_2, .operator_2 = oLess_Or_Equal};
+				ret.type = tkOperator_2;
+				ret.operator_2 = oLess_Or_Equal;
 			}else if(c=='<'){
 				next();
-				return (struct Token){.type = tkOperator_2, .operator_2 = oLeft_Shift};
+				ret.type = tkOperator_2;
+				ret.operator_2 = oLeft_Shift;
+			}else{
+				ret.type = tkOperator_2;
+				ret.operator_2 = oLess;
 			}
-			return (struct Token){.type = tkOperator_2, .operator_2 = oLess};
-		case '>':
+		break;case '>':
 			next();
 			if(c=='='){
 				next();
-				return (struct Token){.type = tkOperator_2, .operator_2 = oGreater_Or_Equal};
+				ret.type = tkOperator_2;
+				ret.operator_2 = oGreater_Or_Equal;
 			}else if(c=='>'){
 				next();
-				return (struct Token){.type = tkOperator_2, .operator_2 = oRight_Shift};
+				ret.type = tkOperator_2;
+				ret.operator_2 = oRight_Shift;
+			}else{
+				ret.type = tkOperator_2;
+				ret.operator_2 = oGreater;
 			}
-			return (struct Token){.type = tkOperator_2, .operator_2 = oGreater};
-		case ',':
+		break;case ',':
 			next();
-			return (struct Token){.type = tkComma, .operator_2 = oComma};
-		case '/':
+			ret.type = tkComma;
+			ret.operator_2 = oComma;
+		break;case '/':
 			next();
-			return (struct Token){.type = tkOperator_2, .operator_2 = oDivide};
-		default:
+			ret.type = tkOperator_2;
+			ret.operator_2 = oDivide;
+		break;default:
 			if(is_alpha(c) || c == '_'){
 				int length=0;
 				do{
@@ -354,8 +372,11 @@ struct Token next_token(){
 					next();
 				}while(is_alpha(c) || is_digit(c) || c == '_');
 				string_temp[length] = '\0';
-				return process_word(string_temp);
+				process_word(string_temp, &ret);
+			}else{
+				ret.type=tkInvalidChar;
 			}
-			parse_error("Invalid character");
 	}
+	exit:
+	return ret;
 }

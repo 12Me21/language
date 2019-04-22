@@ -43,11 +43,13 @@ int main(int argc, char * argv[]){
 		return 0;
 	break;case 1:
 		//parsing error
-	break;case 2:
-		printf("Error while running line %d\n", get_line(pos));
+	break;case 2:;
+		struct Line line = get_line(pos);
+		printf("Error while running line %d\n", line.line);
 		uint i;
-		for(i = call_stack_pointer-1;i!=-1;i--){
-			printf("Also check line %d\n", get_line(call_stack[i]));
+		for(i = call_stack_pointer-1; i!=-1; i--){
+			line = get_line(call_stack[i]);
+			printf("Also check line %d\n", line.line);
 		}
 	}
 	return 1;

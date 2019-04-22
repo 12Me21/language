@@ -1,10 +1,32 @@
 struct Token token;
 bool read_next;
 
+void parse_error_1(){
+	printf("Error while parsing line %d, character %d\n ", real_line.line, real_line.column);
+}
+
+void parse_error_2(){
+	longjmp(err_ret, 1);
+}
+
+#define parse_error(...) (parse_error_1(), printf(__VA_ARGS__), parse_error_2())
+
+uint output_length = 0;
+
+struct Line address_position_in_code[65536] = {};
+
+struct Line get_line(Address address){
+	while(address_position_in_code[address].line==0)
+		address++;
+	return address_position_in_code[address];
+}
+
 void next_t(){
-	if(read_next)
+	if(read_next){
 		token = next_token();
-	else
+		//printf("read token %d %d, %d\n",token.position_in_file.line,token.position_in_file.column,output_length);
+		address_position_in_code[output_length] = token.position_in_file;
+	}else
 		read_next=true;
 	//printf("token t %d\n",token.type);
 }
@@ -208,6 +230,10 @@ enum Keyword read_line();
 
 void expected(char * expected){
 	parse_error("Expected %s, got `%s`\n", expected, token_name_2(token));
+}
+
+void unexpected_end(char * got, char * expected, char * start, struct Line start_line){
+	parse_error("Encountered `%s` while expecting `%s` (to end `%s` on line %d char %d)\n", got, expected, start, start_line.line, start_line.column);
 }
 
 bool read_expression(bool allow_comma){
@@ -426,7 +452,7 @@ enum Keyword read_line(){
 		next_t();
 		switch(token.type){
 		case tkLine_Break: case tkSemicolon:
-			
+			//
 		break;case tkKeyword:
 			switch(token.keyword){
 			//WHILE
@@ -534,10 +560,6 @@ enum Keyword read_line(){
 	}
 	return 0;
 }
-
-// void parse_function(){
-	
-// }
 
 //parser/tokenizer can take either stream or string as input
 //This is an ugly hack but I need to use it because my C compiler doesn't have `fmemopen`
